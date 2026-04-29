@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Aptos", "Segoe UI Variable Text", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Aptos Display", "Segoe UI Variable Display", "Aptos", "Helvetica Neue", Arial, sans-serif;
+  --background: 204 45% 98%;
+  --foreground: 201 73% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 201 73% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 201 73% 12%;
+  --primary: 200 89% 41%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 192 84% 47%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 200 33% 93%;
+  --muted-foreground: 201 24% 38%;
+  --accent: 198 86% 32%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 74% 42%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 199 32% 84%;
+  --input: 199 32% 84%;
+  --ring: 200 89% 41%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    linear-gradient(180deg, rgba(247, 250, 252, 0.97), rgba(247, 250, 252, 1)),
+    radial-gradient(circle at top left, rgba(18, 181, 220, 0.12), transparent 42%);
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01" 1, "cv01" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+}
+
+h1,
+h2 {
+  font-weight: 760;
+}
+
+h3,
+strong,
+b {
+  font-weight: 700;
+}
+
+::selection {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+}
+
+.technical-grid {
+  background-image:
+    linear-gradient(rgba(11, 131, 196, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 131, 196, 0.07) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
