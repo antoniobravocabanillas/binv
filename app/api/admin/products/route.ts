@@ -12,15 +12,20 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const { page, pageSize, skip, take } = getPagination(searchParams);
     const q = searchParams.get("q")?.trim();
-    const where = q
-      ? {
-          OR: [
-            { name: { contains: q, mode: "insensitive" as const } },
-            { sku: { contains: q, mode: "insensitive" as const } },
-            { brand: { contains: q, mode: "insensitive" as const } }
-          ]
-        }
-      : {};
+    const where = {
+      AND: [
+        { isActive: true },
+        q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" as const } },
+                { sku: { contains: q, mode: "insensitive" as const } },
+                { brand: { contains: q, mode: "insensitive" as const } }
+              ]
+            }
+          : {}
+      ]
+    };
 
     const [products, total] = await prisma.$transaction([
       prisma.product.findMany({ where, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, skip, take }),

@@ -5,11 +5,11 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminPage() {
-  const [productCount, pendingOrders, newLeads, messageCount, recentLeads] = await prisma.$transaction([
-    prisma.product.count(),
+  const [productCount, pendingOrders, newLeads, waitingChats, recentLeads] = await prisma.$transaction([
+    prisma.product.count({ where: { isActive: true } }),
     prisma.order.count({ where: { status: "PENDING" } }),
     prisma.lead.count({ where: { status: "NEW" } }),
-    prisma.contactMessage.count(),
+    prisma.chatConversation.count({ where: { status: "WAITING" } }),
     prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 5 })
   ]);
 
@@ -20,7 +20,10 @@ export default async function AdminPage() {
           <h1 className="font-display text-3xl font-bold">Panel administrativo</h1>
           <p className="mt-2 text-muted-foreground">Resumen comercial y operativo de ICC Topografia.</p>
         </div>
-        <Button asChild><Link href="/admin/leads">Ver leads</Link></Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline"><Link href="/admin/chat">Ver chat</Link></Button>
+          <Button asChild><Link href="/admin/leads">Ver leads</Link></Button>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-5 md:grid-cols-4">
@@ -28,7 +31,7 @@ export default async function AdminPage() {
           ["Productos", productCount, "Catalogo tecnico"],
           ["Pedidos pendientes", pendingOrders, "Ordenes por revisar"],
           ["Leads nuevos", newLeads, "Cotizaciones entrantes"],
-          ["Mensajes", messageCount, "Contacto general"]
+          ["Chats esperando", waitingChats, "Atencion en linea"]
         ].map(([title, value, text]) => (
           <Card key={String(title)}>
             <CardHeader>

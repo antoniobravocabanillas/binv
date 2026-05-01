@@ -17,8 +17,8 @@ export const revalidate = 0;
 
 export default async function StorePage() {
   const [categories, products] = await Promise.all([
-    prisma.category.findMany({ include: { _count: { select: { products: true } } }, orderBy: { name: "asc" } }),
-    prisma.product.findMany({ include: { category: true, variants: true }, orderBy: { updatedAt: "desc" } })
+    prisma.category.findMany({ include: { _count: { select: { products: { where: { isActive: true } } } } }, orderBy: { name: "asc" } }),
+    prisma.product.findMany({ where: { isActive: true }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" } })
   ]);
   const storeProducts = products.map(serializeProduct);
 

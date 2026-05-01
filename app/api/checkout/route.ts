@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const payload = checkoutSchema.parse(await request.json());
     const productIds = payload.items.map((item) => item.productId);
-    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
+    const products = await prisma.product.findMany({ where: { id: { in: productIds }, isActive: true } });
 
     if (products.length !== productIds.length) {
       return fail("Uno o mas productos no existen", 404);

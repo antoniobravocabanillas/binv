@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SectionHeading } from "@/components/section-heading";
-import { services } from "@/lib/content/services";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -11,7 +11,15 @@ export const metadata = createMetadata({
   path: "/servicios"
 });
 
-export default function ServicesPage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function ServicesPage() {
+  const services = await prisma.service.findMany({
+    where: { isPublished: true },
+    orderBy: { updatedAt: "desc" }
+  });
+
   return (
     <section className="container py-16">
       <SectionHeading eyebrow="Servicios" title="Soluciones tecnicas para campo, gabinete y operacion" description="Cada servicio esta estructurado para generar entregables claros, trazabilidad y soporte comercial especializado." />

@@ -2,12 +2,20 @@ import Link from "next/link";
 import { SectionHeading } from "@/components/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { posts } from "@/lib/content/site";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({ title: "Blog y recursos", description: "Guias de compra, mantenimiento y operacion para topografia e instrumentacion.", path: "/blog" });
 
-export default function BlogPage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function BlogPage() {
+  const posts = await prisma.blogPost.findMany({
+    where: { publishedAt: { not: null } },
+    orderBy: { publishedAt: "desc" }
+  });
+
   return (
     <section className="container py-16">
       <SectionHeading eyebrow="Recursos" title="Contenido tecnico para decidir mejor" />

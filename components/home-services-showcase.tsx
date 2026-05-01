@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { ArrowRight, Box, Compass, Crosshair, DraftingCompass, Map, Network, ScanLine, Wrench } from "lucide-react";
-import type { Service } from "@/lib/content/services";
 import { Badge } from "@/components/ui/badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
+type HomeService = {
+  slug: string;
+  title: string;
+  summary: string;
+};
+
 const serviceIcons = [Crosshair, Compass, Network, Box, Map, DraftingCompass, ScanLine, Wrench];
 
-export function HomeServicesShowcase({ services }: { services: Service[] }) {
+export function HomeServicesShowcase({ services }: { services: HomeService[] }) {
   return (
     <section className="relative overflow-hidden border-y bg-[#03111D] py-20 text-white">
       <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(36,200,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.08)_1px,transparent_1px)] [background-size:40px_40px]" />

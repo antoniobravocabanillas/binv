@@ -10,8 +10,8 @@ type ProductRouteProps = {
 export async function GET(_request: Request, { params }: ProductRouteProps) {
   try {
     const { slug } = slugParamSchema.parse(await params);
-    const product = await prisma.product.findUnique({
-      where: { slug },
+    const product = await prisma.product.findFirst({
+      where: { slug, isActive: true },
       include: { category: true, variants: true }
     });
 

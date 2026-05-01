@@ -11,6 +11,7 @@ export async function GET(request: Request) {
 
     const where = {
       AND: [
+        { isActive: true },
         q
           ? {
               OR: [

@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils";
 
 export default async function AdminProductsPage() {
   const products = await prisma.product.findMany({
+    where: { isActive: true },
     include: { category: true },
     orderBy: { updatedAt: "desc" }
   });

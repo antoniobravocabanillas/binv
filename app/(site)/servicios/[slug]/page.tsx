@@ -2,26 +2,35 @@ import { notFound } from "next/navigation";
 import { ContactForm } from "@/components/forms/contact-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { services } from "@/lib/content/services";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
 type ServicePageProps = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return services.map((service) => ({ slug: service.slug }));
-}
+type ServiceContent = {
+  problem?: string;
+  benefits?: string[];
+  process?: string[];
+  deliverables?: string[];
+  equipment?: string[];
+  body?: string;
+};
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function generateMetadata({ params }: ServicePageProps) {
   const { slug } = await params;
-  const service = services.find((item) => item.slug === slug);
+  const service = await prisma.service.findUnique({ where: { slug } });
   if (!service) return {};
   return createMetadata({ title: service.title, description: service.summary, path: `/servicios/${service.slug}` });
 }
 
 export default async function ServicePage({ params }: ServicePageProps) {
   const { slug } = await params;
-  const service = services.find((item) => item.slug === slug);
-  if (!service) notFound();
+  const service = await prisma.service.findUnique({ where: { slug } });
+  if (!service || !service.isPublished) notFound();
+  const content = service.content as ServiceContent;
 
   return (
     <section className="container grid gap-10 py-16 lg:grid-cols-[1fr_380px]">
@@ -32,13 +41,13 @@ export default async function ServicePage({ params }: ServicePageProps) {
         <div className="mt-10 grid gap-5">
           <Card>
             <CardHeader><CardTitle>Problema que resuelve</CardTitle></CardHeader>
-            <CardContent className="text-muted-foreground">{service.problem}</CardContent>
+            <CardContent className="text-muted-foreground">{content.problem || content.body || "Contenido editable desde el CMS."}</CardContent>
           </Card>
           <div className="grid gap-5 md:grid-cols-2">
-            <InfoList title="Beneficios" items={service.benefits} />
-            <InfoList title="Proceso de trabajo" items={service.process} />
-            <InfoList title="Entregables" items={service.deliverables} />
-            <InfoList title="Equipamiento aplicable" items={service.equipment} />
+            <InfoList title="Beneficios" items={content.benefits || []} />
+            <InfoList title="Proceso de trabajo" items={content.process || []} />
+            <InfoList title="Entregables" items={content.deliverables || []} />
+            <InfoList title="Equipamiento aplicable" items={content.equipment || []} />
           </div>
         </div>
       </div>
@@ -55,7 +64,7 @@ function InfoList({ title, items }: { title: string; items: string[] }) {
       <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
       <CardContent>
         <ul className="space-y-2 text-sm leading-6 text-muted-foreground">
-          {items.map((item) => <li key={item}>- {item}</li>)}
+          {(items.length ? items : ["Editable desde el CMS"]).map((item) => <li key={item}>- {item}</li>)}
         </ul>
       </CardContent>
     </Card>

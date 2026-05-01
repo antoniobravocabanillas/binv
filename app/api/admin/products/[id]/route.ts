@@ -52,7 +52,7 @@ export async function DELETE(_request: Request, { params }: ProductAdminRoutePro
 
   try {
     const { id } = idSchema.parse(await params);
-    await prisma.product.delete({ where: { id } });
+    await prisma.product.update({ where: { id }, data: { isActive: false } });
     return ok({ deleted: true });
   } catch (error) {
     return handleApiError(error);

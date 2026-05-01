@@ -9,10 +9,10 @@ import { ConversionBand } from "@/components/conversion-band";
 import { ProductCard } from "@/components/product-card";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SectionHeading } from "@/components/section-heading";
-import { categories, products } from "@/lib/content/products";
-import { faqs, operatingStandard, partners, projects, testimonials } from "@/lib/content/site";
-import { services } from "@/lib/content/services";
+import { operatingStandard, partners, projects } from "@/lib/content/site";
 import { brand } from "@/lib/brand";
+import { prisma } from "@/lib/prisma";
+import { serializeProduct } from "@/lib/server/serializers";
 
 const advantages = [
   { icon: ShieldCheck, title: "Confianza tecnica", text: "Trazabilidad, certificados, QA/QC y entregables consistentes." },
@@ -28,7 +28,19 @@ const heroMetrics = [
   { icon: SlidersHorizontal, value: "360", label: "servicios, equipos y calibracion" }
 ];
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function HomePage() {
+  const [services, faqs, testimonials, categories, products] = await Promise.all([
+    prisma.service.findMany({ where: { isPublished: true }, orderBy: { updatedAt: "desc" }, take: 8 }),
+    prisma.faq.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 6 }),
+    prisma.testimonial.findMany({ where: { active: true }, orderBy: { createdAt: "desc" }, take: 2 }),
+    prisma.category.findMany({ where: { products: { some: { isActive: true } } }, orderBy: { name: "asc" }, take: 12 }),
+    prisma.product.findMany({ where: { isActive: true }, include: { category: true, variants: true }, orderBy: { updatedAt: "desc" }, take: 4 })
+  ]);
+  const featuredProducts = products.map(serializeProduct);
+
   return (
     <>
       <section className="relative isolate overflow-hidden border-b bg-[#03111D] text-white">
@@ -88,16 +100,16 @@ export default function HomePage() {
             <SectionHeading tone="dark" eyebrow="Tienda tecnica" title="Categorias preparadas para compra consultiva" description="Catalogo pensado para instrumentos de ticket alto, productos con precio y soluciones que requieren cotizacion." />
           </ScrollReveal>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {categories.slice(0, 12).map((category, index) => (
-              <ScrollReveal key={category} delay={index * 35}>
-                <Link href={`/tienda?categoria=${encodeURIComponent(category)}`} className="block rounded-md border border-white/12 bg-white/[0.055] p-4 font-semibold text-white transition hover:border-[#24C8EE]/70 hover:bg-white/[0.085]">
-                  {category}
+            {categories.map((category, index) => (
+              <ScrollReveal key={category.id} delay={index * 35}>
+                <Link href={`/tienda?categoria=${encodeURIComponent(category.slug)}`} className="block rounded-md border border-white/12 bg-white/[0.055] p-4 font-semibold text-white transition hover:border-[#24C8EE]/70 hover:bg-white/[0.085]">
+                  {category.name}
                 </Link>
               </ScrollReveal>
             ))}
           </div>
           <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {products.map((product, index) => (
+            {featuredProducts.map((product, index) => (
               <ScrollReveal key={product.slug} delay={index * 70}>
                 <ProductCard product={product} />
               </ScrollReveal>

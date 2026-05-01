@@ -1,11 +1,19 @@
 import { SectionHeading } from "@/components/section-heading";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { faqs } from "@/lib/content/site";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({ title: "Preguntas frecuentes", description: "Preguntas frecuentes sobre servicios, cotizaciones, tienda, calibracion y soporte.", path: "/faq" });
 
-export default function FaqPage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function FaqPage() {
+  const faqs = await prisma.faq.findMany({
+    where: { active: true },
+    orderBy: [{ position: "asc" }, { createdAt: "desc" }]
+  });
+
   return (
     <section className="container py-16">
       <SectionHeading eyebrow="FAQ" title="Respuestas para compra, soporte y contratacion" />

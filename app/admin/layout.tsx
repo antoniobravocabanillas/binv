@@ -9,6 +9,7 @@ const adminNav = [
   ["Productos", "/admin/productos"],
   ["Pedidos", "/admin/pedidos"],
   ["Contenidos", "/admin/contenidos"],
+  ["Chat", "/admin/chat"],
   ["Leads", "/admin/leads"]
 ];
 
