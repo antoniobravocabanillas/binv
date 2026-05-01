@@ -45,7 +45,7 @@ export default async function AdminLeadsPage() {
                     </td>
                     <td className="p-3">{lead.company || "-"}</td>
                     <td className="max-w-sm p-3 leading-6">{lead.message}</td>
-                    <td className="p-3">{lead.source || "web"}</td>
+                    <td className="max-w-xs p-3 text-xs leading-5">{lead.source || "web"}</td>
                     <td className="p-3"><StatusBadge status={lead.status} /></td>
                   </tr>
                 ))}

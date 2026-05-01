@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, MessageCircle, ShoppingCart } from "lucide-react";
 import { ContactForm } from "@/components/forms/contact-form";
@@ -8,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { products } from "@/lib/content/products";
 import { createMetadata } from "@/lib/seo";
-import { formatCurrency } from "@/lib/utils";
+import { absoluteUrl, formatCurrency } from "@/lib/utils";
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
@@ -28,6 +27,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const product = products.find((item) => item.slug === slug);
   if (!product) notFound();
   const related = products.filter((item) => product.related.includes(item.slug));
+  const quoteSubject = `${product.name} | ${product.brand} ${product.model} | Categoria: ${product.category}`;
+  const quoteContext = `Producto: ${product.name} | Marca: ${product.brand} | Modelo: ${product.model} | Categoria: ${product.category} | URL: ${absoluteUrl(`/tienda/${product.slug}`)}`;
 
   return (
     <section className="container py-16">
@@ -74,7 +75,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 {product.price ? "Agregar al carrito" : "Compra consultiva"}
               </Button>
               <Button asChild variant="secondary" className="w-full">
-                <Link href="/cotizacion">Solicitar cotizacion</Link>
+                <a href="#cotizar-producto">Solicitar cotizacion</a>
               </Button>
               <Button asChild variant="outline" className="w-full">
                 <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "51999999999"}`}>
@@ -88,7 +89,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
               </Button>
             </CardContent>
           </Card>
-          <ContactForm intent="product" context={product.name} />
+          <div id="cotizar-producto" className="scroll-mt-24">
+            <ContactForm intent="product" context={quoteContext} subject={quoteSubject} />
+          </div>
         </aside>
       </div>
       {related.length ? (

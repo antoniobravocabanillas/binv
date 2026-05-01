@@ -7,7 +7,8 @@ export const contactSchema = z.object({
   company: z.string().trim().optional(),
   message: z.string().trim().min(10),
   intent: z.string().trim().optional(),
-  context: z.string().trim().optional()
+  context: z.string().trim().optional(),
+  subject: z.string().trim().optional()
 });
 
 export const leadSchema = z.object({
@@ -17,7 +18,8 @@ export const leadSchema = z.object({
   company: z.string().trim().optional(),
   message: z.string().trim().min(10),
   intent: z.string().trim().optional(),
-  context: z.string().trim().optional()
+  context: z.string().trim().optional(),
+  subject: z.string().trim().optional()
 });
 
 export const leadStatusSchema = z.object({

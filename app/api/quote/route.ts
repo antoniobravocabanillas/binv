@@ -14,8 +14,8 @@ export async function POST(request: Request) {
         email: parsed.email,
         phone: parsed.phone,
         company: parsed.company,
-        message: parsed.message,
-        source: parsed.context ?? parsed.intent ?? "web"
+        message: parsed.subject ? `[${parsed.subject}] ${parsed.message}` : parsed.message,
+        source: parsed.context ?? parsed.subject ?? parsed.intent ?? "web"
       }
     });
 

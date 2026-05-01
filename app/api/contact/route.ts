@@ -8,7 +8,13 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const parsed = contactSchema.parse(Object.fromEntries(formData));
 
-    const contact = await prisma.contactMessage.create({ data: parsed });
+    const contact = await prisma.contactMessage.create({
+      data: {
+        ...parsed,
+        message: parsed.subject ? `[${parsed.subject}] ${parsed.message}` : parsed.message,
+        context: parsed.context ?? parsed.subject
+      }
+    });
     return NextResponse.json({ ok: true, id: contact.id }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

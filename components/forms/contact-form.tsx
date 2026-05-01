@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 type ContactFormProps = {
   intent?: "contact" | "quote" | "service" | "product";
   context?: string;
+  subject?: string;
 };
 
-export function ContactForm({ intent = "contact", context }: ContactFormProps) {
+export function ContactForm({ intent = "contact", context, subject }: ContactFormProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const submittedRef = useRef(false);
 
@@ -22,6 +23,7 @@ export function ContactForm({ intent = "contact", context }: ContactFormProps) {
     const endpoint = intent === "quote" || intent === "service" || intent === "product" ? "/api/quote" : "/api/contact";
     formData.set("intent", intent);
     if (context) formData.set("context", context);
+    if (subject) formData.set("subject", subject);
 
     const response = await fetch(endpoint, { method: "POST", body: formData });
     setStatus(response.ok ? "success" : "error");
@@ -30,6 +32,11 @@ export function ContactForm({ intent = "contact", context }: ContactFormProps) {
 
   return (
     <form action={submit} className="grid gap-4 rounded-lg border bg-card p-5 shadow-technical">
+      {subject ? (
+        <div className="rounded-md border bg-muted px-3 py-2 text-sm">
+          <span className="font-semibold">Solicitud sobre:</span> {subject}
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <Input required name="name" placeholder="Nombre y apellido" autoComplete="name" />
         <Input required name="email" type="email" placeholder="Correo corporativo" autoComplete="email" />
