@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Menu, PhoneCall, ShoppingCart } from "lucide-react";
+import { Menu, PhoneCall } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { CartNavButton } from "@/components/cart/cart-nav-button";
 import { Button } from "@/components/ui/button";
 import { brand } from "@/lib/brand";
 
@@ -33,11 +34,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="icon" aria-label="Carrito">
-            <Link href="/checkout">
-              <ShoppingCart className="h-5 w-5" />
-            </Link>
-          </Button>
+          <CartNavButton />
           <Button asChild className="hidden sm:inline-flex">
             <Link href="/cotizacion">
               <PhoneCall className="h-4 w-4" />

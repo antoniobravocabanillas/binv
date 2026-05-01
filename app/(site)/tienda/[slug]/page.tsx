@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { Download, MessageCircle, ShoppingCart } from "lucide-react";
+import { Download, MessageCircle } from "lucide-react";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { ContactForm } from "@/components/forms/contact-form";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductCard } from "@/components/product-card";
@@ -81,10 +82,21 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <p className="text-sm text-muted-foreground">
                 Disponibilidad: <strong className="text-foreground">{product.stock > 0 ? `${product.stock} disponible(s)` : product.availability}</strong>
               </p>
-              <Button className="w-full" disabled={!product.price || product.stock <= 0}>
-                <ShoppingCart className="h-4 w-4" />
-                {product.price && product.stock > 0 ? "Agregar al carrito" : "Compra consultiva"}
-              </Button>
+              <AddToCartButton
+                disabled={!product.price || product.stock <= 0}
+                disabledLabel={product.price ? "Sin stock para compra directa" : "Compra consultiva"}
+                item={{
+                  productId: product.id,
+                  slug: product.slug,
+                  name: product.name,
+                  brand: product.brand,
+                  model: product.model,
+                  price: product.price || 0,
+                  currency: product.currency,
+                  image: product.images[0] || null,
+                  stock: product.stock
+                }}
+              />
               <Button asChild variant="secondary" className="w-full">
                 <a href="#cotizar-producto">Solicitar cotizacion</a>
               </Button>

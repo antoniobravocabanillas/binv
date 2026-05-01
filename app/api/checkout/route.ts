@@ -20,6 +20,16 @@ export async function POST(request: Request) {
       return fail("El carrito contiene productos que requieren cotizacion", 409);
     }
 
+    const outOfStockItem = payload.items.find((item) => {
+      const product = productMap.get(item.productId);
+      return !product || product.stock < item.quantity;
+    });
+
+    if (outOfStockItem) {
+      const product = productMap.get(outOfStockItem.productId);
+      return fail(`Stock insuficiente para ${product?.name || "uno de los productos"}`, 409);
+    }
+
     const items = payload.items.map((item) => {
       const product = productMap.get(item.productId);
       if (!product?.price) throw new Error("Producto sin precio");
