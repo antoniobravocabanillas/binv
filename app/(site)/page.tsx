@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, MessageCircle, Radar, Ruler, ShieldCheck, SlidersHorizontal, Wrench } from "lucide-react";
 import { HomeHero3D } from "@/components/home-hero-3d";
+import { HomeServicesShowcase } from "@/components/home-services-showcase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConversionBand } from "@/components/conversion-band";
 import { ProductCard } from "@/components/product-card";
+import { ScrollReveal } from "@/components/scroll-reveal";
 import { SectionHeading } from "@/components/section-heading";
 import { categories, products } from "@/lib/content/products";
 import { faqs, operatingStandard, partners, projects, testimonials } from "@/lib/content/site";
@@ -77,59 +79,55 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="container py-16">
-        <SectionHeading eyebrow="Servicios destacados" title="Cobertura tecnica de campo, gabinete y soporte" description="Servicios disenados para reducir riesgo operativo, mejorar trazabilidad y acelerar decisiones tecnicas." />
-        <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {services.slice(0, 8).map((service) => (
-            <Card key={service.slug}>
-              <CardHeader>
-                <CardTitle>{service.title}</CardTitle>
-                <CardDescription>{service.summary}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href={`/servicios/${service.slug}`}>Ver servicio</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
+      <HomeServicesShowcase services={services} />
 
-      <section className="border-y bg-white/72 py-16">
-        <div className="container">
-          <SectionHeading eyebrow="Tienda tecnica" title="Categorias preparadas para compra consultiva" description="Catalogo pensado para instrumentos de ticket alto, productos con precio y soluciones que requieren cotizacion." />
+      <section className="relative overflow-hidden border-y bg-[#061827] py-20 text-white">
+        <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(36,200,238,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.08)_1px,transparent_1px)] [background-size:36px_36px]" />
+        <div className="container relative">
+          <ScrollReveal>
+            <SectionHeading tone="dark" eyebrow="Tienda tecnica" title="Categorias preparadas para compra consultiva" description="Catalogo pensado para instrumentos de ticket alto, productos con precio y soluciones que requieren cotizacion." />
+          </ScrollReveal>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {categories.slice(0, 12).map((category) => (
-              <Link key={category} href={`/tienda?categoria=${encodeURIComponent(category)}`} className="rounded-md border bg-background p-4 font-semibold hover:border-primary">
-                {category}
-              </Link>
+            {categories.slice(0, 12).map((category, index) => (
+              <ScrollReveal key={category} delay={index * 35}>
+                <Link href={`/tienda?categoria=${encodeURIComponent(category)}`} className="block rounded-md border border-white/12 bg-white/[0.055] p-4 font-semibold text-white transition hover:border-[#24C8EE]/70 hover:bg-white/[0.085]">
+                  {category}
+                </Link>
+              </ScrollReveal>
             ))}
           </div>
           <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {products.map((product) => <ProductCard key={product.slug} product={product} />)}
+            {products.map((product, index) => (
+              <ScrollReveal key={product.slug} delay={index * 70}>
+                <ProductCard product={product} />
+              </ScrollReveal>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="container grid gap-8 py-16 lg:grid-cols-[0.9fr_1.1fr]">
-        <SectionHeading eyebrow="Ventajas competitivas" title="La venta tecnica no termina en la factura" description="Cada compra, alquiler o servicio se acompana con criterio de aplicacion, puesta en marcha y respaldo postventa." />
+      <section className="container grid gap-8 py-20 lg:grid-cols-[0.9fr_1.1fr]">
+        <ScrollReveal>
+          <SectionHeading eyebrow="Ventajas competitivas" title="La venta tecnica no termina en la factura" description="Cada compra, alquiler o servicio se acompana con criterio de aplicacion, puesta en marcha y respaldo postventa." />
+        </ScrollReveal>
         <div className="grid gap-4 sm:grid-cols-2">
-          {advantages.map(({ icon: Icon, title, text }) => (
-            <Card key={title}>
+          {advantages.map(({ icon: Icon, title, text }, index) => (
+            <ScrollReveal key={title} delay={index * 80}>
+              <Card className="h-full transition duration-300 hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">
               <CardHeader>
                 <Icon className="h-6 w-6 text-primary" />
                 <CardTitle>{title}</CardTitle>
                 <CardDescription>{text}</CardDescription>
               </CardHeader>
             </Card>
+            </ScrollReveal>
           ))}
         </div>
       </section>
 
-      <section className="border-y bg-[#063D63] py-16 text-white">
+      <section className="border-y bg-[#063D63] py-20 text-white">
         <div className="container grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
+          <ScrollReveal>
             <Badge className="bg-[#12B5DC] text-white">{operatingStandard.kicker}</Badge>
             <h2 className="mt-5 font-display text-3xl font-bold md:text-4xl">{operatingStandard.title}</h2>
             <p className="mt-5 text-base leading-7 text-white/76">{operatingStandard.description}</p>
@@ -141,31 +139,42 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-          </div>
+          </ScrollReveal>
           <div className="grid gap-3">
-            {operatingStandard.credentials.map((credential) => (
-              <div key={credential} className="rounded-md border border-white/15 bg-white/8 p-4 text-sm leading-6 text-white/82">
+            {operatingStandard.credentials.map((credential, index) => (
+              <ScrollReveal key={credential} delay={index * 70}>
+              <div className="rounded-md border border-white/15 bg-white/8 p-4 text-sm leading-6 text-white/82 backdrop-blur transition hover:border-[#24C8EE]/50">
                 {credential}
               </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="border-y bg-white/72 py-16">
+      <section className="border-y bg-white/72 py-20">
         <div className="container">
-          <SectionHeading eyebrow="Partners y marcas" title="Ecosistema de instrumentacion profesional" />
+          <ScrollReveal>
+            <SectionHeading eyebrow="Partners y marcas" title="Ecosistema de instrumentacion profesional" />
+          </ScrollReveal>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            {partners.map((partner) => <div key={partner} className="rounded-md border bg-background p-4 text-center text-sm font-semibold">{partner}</div>)}
+            {partners.map((partner, index) => (
+              <ScrollReveal key={partner} delay={index * 45}>
+                <div className="rounded-md border bg-background p-4 text-center text-sm font-semibold transition hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">{partner}</div>
+              </ScrollReveal>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="container py-16">
-        <SectionHeading eyebrow="Casos de exito" title="Proyectos donde la precision tiene impacto comercial" />
+      <section className="container py-20">
+        <ScrollReveal>
+          <SectionHeading eyebrow="Casos de exito" title="Proyectos donde la precision tiene impacto comercial" />
+        </ScrollReveal>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
-          {projects.map((project) => (
-            <Card key={project.title}>
+          {projects.map((project, index) => (
+            <ScrollReveal key={project.title} delay={index * 70}>
+            <Card className="h-full transition duration-300 hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">
               <CardHeader>
                 <Badge variant="outline">{project.sector}</Badge>
                 <CardTitle>{project.title}</CardTitle>
@@ -175,31 +184,38 @@ export default function HomePage() {
                 <p className="text-2xl font-bold text-primary">{project.metric}</p>
               </CardContent>
             </Card>
+            </ScrollReveal>
           ))}
         </div>
       </section>
 
-      <section className="border-y bg-white/72 py-16">
+      <section className="border-y bg-white/72 py-20">
         <div className="container grid gap-8 lg:grid-cols-2">
-          {testimonials.map((testimonial) => (
-            <blockquote key={testimonial.author} className="rounded-lg border bg-background p-6 shadow-technical">
+          {testimonials.map((testimonial, index) => (
+            <ScrollReveal key={testimonial.author} delay={index * 90}>
+            <blockquote className="rounded-lg border bg-background p-6 shadow-technical transition hover:-translate-y-1 hover:border-primary/50 motion-reduce:transform-none">
               <p className="text-lg leading-8">&ldquo;{testimonial.quote}&rdquo;</p>
               <footer className="mt-5 text-sm text-muted-foreground">{testimonial.author} - {testimonial.company}</footer>
             </blockquote>
+            </ScrollReveal>
           ))}
         </div>
       </section>
 
-      <section className="container py-16">
-        <SectionHeading eyebrow="FAQ" title="Preguntas frecuentes antes de cotizar" />
+      <section className="container py-20">
+        <ScrollReveal>
+          <SectionHeading eyebrow="FAQ" title="Preguntas frecuentes antes de cotizar" />
+        </ScrollReveal>
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {faqs.map((faq) => (
-            <Card key={faq.question}>
+          {faqs.map((faq, index) => (
+            <ScrollReveal key={faq.question} delay={index * 55}>
+            <Card className="h-full transition duration-300 hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">
               <CardHeader>
                 <CardTitle>{faq.question}</CardTitle>
                 <CardDescription>{faq.answer}</CardDescription>
               </CardHeader>
             </Card>
+            </ScrollReveal>
           ))}
         </div>
       </section>
