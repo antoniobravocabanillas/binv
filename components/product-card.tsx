@@ -4,15 +4,28 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
-import type { Product } from "@/lib/content/products";
 
-export function ProductCard({ product }: { product: Product }) {
+type ProductCardProduct = {
+  slug: string;
+  name: string;
+  brand: string;
+  summary: string;
+  availability: string;
+  price?: number | null;
+  badge?: string | null;
+  requiresQuote?: boolean;
+  stock?: number;
+};
+
+export function ProductCard({ product }: { product: ProductCardProduct }) {
+  const stock = product.stock ?? 0;
+
   return (
     <Card className="overflow-hidden">
       <div className="technical-grid aspect-[4/3] bg-muted p-4">
         <div className="flex h-full items-end justify-between rounded-md border bg-white/82 p-4">
           <div>
-            <Badge variant={product.badge === "Oferta" ? "secondary" : "default"}>{product.badge}</Badge>
+            <Badge variant={product.badge === "Oferta" ? "secondary" : "default"}>{product.badge || (product.requiresQuote ? "Cotizar" : "Disponible")}</Badge>
             <p className="mt-3 text-xs font-semibold uppercase text-muted-foreground">{product.brand}</p>
             <h3 className="mt-1 text-lg font-bold">{product.name}</h3>
           </div>
@@ -26,7 +39,7 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground">Disponibilidad</p>
-            <p className="text-sm font-semibold">{product.availability}</p>
+            <p className="text-sm font-semibold">{stock > 0 ? `${stock} disponible(s)` : product.availability}</p>
           </div>
           <p className="text-lg font-bold">{product.price ? formatCurrency(product.price) : "Cotizar"}</p>
         </div>

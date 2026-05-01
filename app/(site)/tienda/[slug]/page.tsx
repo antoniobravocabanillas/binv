@@ -5,30 +5,41 @@ import { ProductCard } from "@/components/product-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { products } from "@/lib/content/products";
+import { prisma } from "@/lib/prisma";
+import { serializeProduct } from "@/lib/server/serializers";
 import { createMetadata } from "@/lib/seo";
 import { absoluteUrl, formatCurrency } from "@/lib/utils";
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
 export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
+  return [];
 }
 
 export async function generateMetadata({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = products.find((item) => item.slug === slug);
+  const product = await prisma.product.findUnique({ where: { slug } });
   if (!product) return {};
   return createMetadata({ title: product.name, description: product.summary, path: `/tienda/${product.slug}` });
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = products.find((item) => item.slug === slug);
-  if (!product) notFound();
-  const related = products.filter((item) => product.related.includes(item.slug));
-  const quoteSubject = `${product.name} | ${product.brand} ${product.model} | Categoria: ${product.category}`;
-  const quoteContext = `Producto: ${product.name} | Marca: ${product.brand} | Modelo: ${product.model} | Categoria: ${product.category} | URL: ${absoluteUrl(`/tienda/${product.slug}`)}`;
+  const dbProduct = await prisma.product.findUnique({
+    where: { slug },
+    include: { category: true, variants: true }
+  });
+  if (!dbProduct) notFound();
+
+  const product = serializeProduct(dbProduct);
+  const related = (await prisma.product.findMany({
+    where: { categoryId: dbProduct.categoryId, id: { not: dbProduct.id } },
+    include: { category: true, variants: true },
+    take: 3
+  })).map(serializeProduct);
+  const specs = product.specifications as Record<string, string>;
+  const quoteSubject = `${product.name} | ${product.brand} ${product.model || ""} | Categoria: ${product.category.name}`;
+  const quoteContext = `Producto: ${product.name} | SKU: ${product.sku} | Marca: ${product.brand} | Modelo: ${product.model || "-"} | Categoria: ${product.category.name} | URL: ${absoluteUrl(`/tienda/${product.slug}`)}`;
 
   return (
     <section className="container py-16">
@@ -37,9 +48,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <div className="technical-grid aspect-[16/10] rounded-lg border bg-muted p-6">
             <div className="flex h-full items-end rounded-md bg-white/86 p-6">
               <div>
-                <Badge>{product.badge}</Badge>
+                <Badge>{product.badge || (product.requiresQuote ? "Cotizar" : "Disponible")}</Badge>
                 <h1 className="mt-4 text-4xl font-bold">{product.name}</h1>
-                <p className="mt-2 text-muted-foreground">{product.brand} · {product.model}</p>
+                <p className="mt-2 text-muted-foreground">{product.brand} - {product.model}</p>
               </div>
             </div>
           </div>
@@ -52,7 +63,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <CardHeader><CardTitle>Especificaciones tecnicas</CardTitle></CardHeader>
               <CardContent>
                 <dl className="space-y-3 text-sm">
-                  {Object.entries(product.specs).map(([key, value]) => (
+                  {Object.entries(specs).map(([key, value]) => (
                     <div key={key} className="flex justify-between gap-4 border-b pb-2">
                       <dt className="font-medium">{key}</dt>
                       <dd className="text-right text-muted-foreground">{value}</dd>
@@ -69,10 +80,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <CardTitle>{product.price ? formatCurrency(product.price) : "Precio bajo cotizacion"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">Disponibilidad: <strong className="text-foreground">{product.availability}</strong></p>
-              <Button className="w-full" disabled={!product.price}>
+              <p className="text-sm text-muted-foreground">
+                Disponibilidad: <strong className="text-foreground">{product.stock > 0 ? `${product.stock} disponible(s)` : product.availability}</strong>
+              </p>
+              <Button className="w-full" disabled={!product.price || product.stock <= 0}>
                 <ShoppingCart className="h-4 w-4" />
-                {product.price ? "Agregar al carrito" : "Compra consultiva"}
+                {product.price && product.stock > 0 ? "Agregar al carrito" : "Compra consultiva"}
               </Button>
               <Button asChild variant="secondary" className="w-full">
                 <a href="#cotizar-producto">Solicitar cotizacion</a>

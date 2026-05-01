@@ -106,6 +106,7 @@ model Product {
   summary         String
   description     String
   price           Decimal?
+  stock           Int         @default(0)
   currency        String      @default("USD")
   requiresQuote   Boolean     @default(false)
   availability    String
@@ -124,6 +125,7 @@ model Product {
   @@index([categoryId])
   @@index([brand])
   @@index([requiresQuote])
+  @@index([stock])
 }
 
 model ProductVariant {

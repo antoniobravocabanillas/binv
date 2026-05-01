@@ -9,6 +9,7 @@ export const productInputSchema = z.object({
   summary: z.string().trim().min(10),
   description: z.string().trim().min(10),
   price: z.coerce.number().positive().optional().nullable(),
+  stock: z.coerce.number().int().min(0).default(0),
   currency: z.string().trim().min(3).max(3).default("USD"),
   requiresQuote: z.coerce.boolean().default(false),
   availability: z.string().trim().min(2),

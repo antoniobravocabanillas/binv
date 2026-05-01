@@ -45,6 +45,7 @@ async function main() {
         summary: product.summary,
         description: product.description,
         price: product.price,
+        stock: product.price ? 3 : 0,
         requiresQuote: !product.price,
         availability: product.availability,
         badge: product.badge,

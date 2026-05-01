@@ -4,6 +4,8 @@ type ProductWithCategory = Prisma.ProductGetPayload<{
   include: { category: true; variants: true };
 }>;
 
+export type StoreProduct = ReturnType<typeof serializeProduct>;
+
 type OrderWithItems = Prisma.OrderGetPayload<{
   include: { items: { include: { product: true } }; address: true };
 }>;
