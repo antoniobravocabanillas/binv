@@ -16,7 +16,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:staff": "tsx prisma/seed-staff.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",

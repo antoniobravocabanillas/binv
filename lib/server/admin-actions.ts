@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { Prisma, StaffDepartment } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -23,6 +23,21 @@ function contentFromText(formData: FormData) {
   } catch {
     return { body };
   }
+}
+
+function listFromTextarea(formData: FormData, key: string) {
+  return (value(formData, key) || "")
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function staffToolsFromForm(formData: FormData) {
+  return {
+    whatsappTemplate: value(formData, "whatsappTemplate") || "",
+    checklist: listFromTextarea(formData, "checklist"),
+    nextSteps: listFromTextarea(formData, "nextSteps")
+  };
 }
 
 export async function deleteLeadAction(id: string) {
@@ -280,10 +295,28 @@ export async function deleteCmsPageAction(id: string) {
 
 export async function takeChatConversationAction(id: string) {
   const session = await auth();
+  const profile = session?.user?.id
+    ? await prisma.staffProfile.findUnique({ where: { userId: session.user.id } })
+    : null;
+
   await prisma.chatConversation.update({
     where: { id },
     data: {
-      status: "ACTIVE",
+      assignedToId: session?.user?.id || undefined,
+      assignedProfileId: profile?.id || undefined
+    }
+  });
+  revalidatePath("/admin/chat");
+}
+
+export async function assignChatProfileAction(id: string, formData: FormData) {
+  const profileId = value(formData, "profileId");
+  const session = await auth();
+
+  await prisma.chatConversation.update({
+    where: { id },
+    data: {
+      assignedProfileId: profileId || null,
       assignedToId: session?.user?.id || undefined
     }
   });
@@ -307,11 +340,21 @@ export async function deleteChatConversationAction(id: string) {
 export async function sendAdminChatMessageAction(id: string, formData: FormData) {
   const body = value(formData, "body");
   if (!body) return;
+  const session = await auth();
+  const profile = session?.user?.id
+    ? await prisma.staffProfile.findUnique({ where: { userId: session.user.id } })
+    : null;
+  const conversation = await prisma.chatConversation.findUnique({
+    where: { id },
+    select: { assignedProfileId: true }
+  });
 
   await prisma.chatConversation.update({
     where: { id },
     data: {
       status: "ACTIVE",
+      assignedToId: session?.user?.id || undefined,
+      assignedProfileId: conversation?.assignedProfileId || profile?.id || undefined,
       messages: {
         create: {
           sender: "admin",
@@ -320,5 +363,46 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
       }
     }
   });
+  revalidatePath("/admin/chat");
+}
+
+export async function createStaffProfileAction(formData: FormData) {
+  await prisma.staffProfile.create({
+    data: {
+      displayName: value(formData, "displayName") || "",
+      email: value(formData, "email"),
+      phone: value(formData, "phone"),
+      roleTitle: value(formData, "roleTitle") || "",
+      department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
+      specialties: listFromTextarea(formData, "specialties"),
+      tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
+      active: checked(formData, "active")
+    }
+  });
+  revalidatePath("/admin/equipo");
+  revalidatePath("/admin/chat");
+}
+
+export async function updateStaffProfileAction(id: string, formData: FormData) {
+  await prisma.staffProfile.update({
+    where: { id },
+    data: {
+      displayName: value(formData, "displayName") || "",
+      email: value(formData, "email"),
+      phone: value(formData, "phone"),
+      roleTitle: value(formData, "roleTitle") || "",
+      department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
+      specialties: listFromTextarea(formData, "specialties"),
+      tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
+      active: checked(formData, "active")
+    }
+  });
+  revalidatePath("/admin/equipo");
+  revalidatePath("/admin/chat");
+}
+
+export async function deleteStaffProfileAction(id: string) {
+  await prisma.staffProfile.delete({ where: { id } });
+  revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
 }

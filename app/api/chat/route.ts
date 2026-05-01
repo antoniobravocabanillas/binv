@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     const customerName = String(formData.get("name") || "").trim();
     const customerEmail = String(formData.get("email") || "").trim() || undefined;
     const customerPhone = String(formData.get("phone") || "").trim() || undefined;
+    const topic = String(formData.get("topic") || "").trim() || undefined;
     if (!customerName) return fail("Nombre requerido", 422);
 
     const conversation = await prisma.chatConversation.create({
@@ -27,10 +28,15 @@ export async function POST(request: Request) {
         customerName,
         customerEmail,
         customerPhone,
+        topic,
         status: "WAITING",
         messages: { create: { sender: "customer", body } }
       },
-      include: { messages: { orderBy: { createdAt: "asc" } } }
+      include: {
+        assignedProfile: true,
+        assignedTo: true,
+        messages: { orderBy: { createdAt: "asc" } }
+      }
     });
 
     return NextResponse.json({ conversationId: conversation.id, conversation }, { status: 201 });
@@ -47,7 +53,11 @@ export async function GET(request: Request) {
 
     const conversation = await prisma.chatConversation.findUnique({
       where: { id },
-      include: { messages: { orderBy: { createdAt: "asc" } } }
+      include: {
+        assignedProfile: true,
+        assignedTo: true,
+        messages: { orderBy: { createdAt: "asc" } }
+      }
     });
     if (!conversation) return fail("Conversacion no encontrada", 404);
     return NextResponse.json({ conversation });

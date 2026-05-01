@@ -10,6 +10,7 @@ const adminNav = [
   ["Pedidos", "/admin/pedidos"],
   ["Contenidos", "/admin/contenidos"],
   ["Chat", "/admin/chat"],
+  ["Equipo", "/admin/equipo"],
   ["Leads", "/admin/leads"]
 ];
 
