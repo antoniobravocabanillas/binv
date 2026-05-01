@@ -12,9 +12,8 @@ import { absoluteUrl, formatCurrency } from "@/lib/utils";
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return [];
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function generateMetadata({ params }: ProductPageProps) {
   const { slug } = await params;
