@@ -11,12 +11,13 @@ Benchmark consultado: Grupo TS, con foco en precision milimetrica, archivo de pr
 ## 2. Arquitectura tecnica
 
 - Frontend: Next.js App Router, TypeScript, Tailwind CSS y componentes estilo shadcn/ui.
-- Backend: Route Handlers de Next.js para formularios, cotizacion, checkout y autenticacion.
+- Backend: Route Handlers de Next.js para catalogo, categorias, servicios, blog, FAQ, formularios, cotizacion, checkout, cuenta, favoritos, CRM, pedidos y administracion.
 - Datos: PostgreSQL con Prisma ORM.
 - Auth: NextAuth v5 con Prisma Adapter y provider credentials inicial.
-- CMS/Admin: panel propio en `/admin` para productos, pedidos, contenidos, leads y CMS.
+- CMS/Admin: panel propio en `/admin` con APIs protegidas por rol para productos, categorias, servicios, blog, FAQ, pedidos, leads y mensajes.
 - SEO: metadata por pagina, sitemap, robots, URLs limpias y contenido semantico.
 - Seguridad: headers basicos, validacion Zod, variables de entorno, separacion de admin.
+- Autorizacion: roles `CUSTOMER`, `SALES`, `EDITOR` y `ADMIN` aplicados en endpoints administrativos.
 - Deploy: Vercel + PostgreSQL gestionado.
 
 ## 3. Arbol de carpetas
@@ -94,6 +95,13 @@ Entidades principales:
 - Compra directa: Tienda -> ficha con precio -> carrito -> checkout -> `Order`.
 - Autoridad SEO: Blog -> post tecnico -> CTA final -> cotizacion.
 - Operacion interna: Admin -> leads/productos/pedidos/contenidos -> gestion comercial.
+
+## 7.1 Endpoints backend iniciales
+
+- Publicos: `GET /api/products`, `GET /api/products/[slug]`, `GET /api/categories`, `GET /api/services`, `GET /api/blog`, `GET /api/faqs`.
+- Conversion: `POST /api/contact`, `POST /api/quote`, `POST /api/checkout`.
+- Cuenta: `POST /api/auth/register`, `GET/POST/DELETE /api/account/favorites`.
+- Admin: `/api/admin/dashboard`, `/api/admin/products`, `/api/admin/categories`, `/api/admin/services`, `/api/admin/posts`, `/api/admin/faqs`, `/api/admin/leads`, `/api/admin/contact-messages`, `/api/admin/orders`.
 
 ## 8. Plan por fases
 

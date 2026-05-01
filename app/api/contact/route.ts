@@ -1,22 +1,20 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-
-const contactSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  company: z.string().optional(),
-  message: z.string().min(10),
-  intent: z.string().optional(),
-  context: z.string().optional()
-});
+import { fail, handleApiError } from "@/lib/server/api";
+import { contactSchema } from "@/lib/validations/crm";
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
-  const parsed = contactSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  try {
+    const formData = await request.formData();
+    const parsed = contactSchema.parse(Object.fromEntries(formData));
 
-  const contact = await prisma.contactMessage.create({ data: parsed.data });
-  return NextResponse.json({ ok: true, id: contact.id });
+    const contact = await prisma.contactMessage.create({ data: parsed });
+    return NextResponse.json({ ok: true, id: contact.id }, { status: 201 });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export function GET() {
+  return fail("Metodo no permitido", 405);
 }

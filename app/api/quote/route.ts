@@ -1,32 +1,30 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-
-const quoteSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  company: z.string().optional(),
-  message: z.string().min(10),
-  intent: z.string().optional(),
-  context: z.string().optional()
-});
+import { fail, handleApiError } from "@/lib/server/api";
+import { leadSchema } from "@/lib/validations/crm";
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
-  const parsed = quoteSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  try {
+    const formData = await request.formData();
+    const parsed = leadSchema.parse(Object.fromEntries(formData));
 
-  const lead = await prisma.lead.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      phone: parsed.data.phone,
-      company: parsed.data.company,
-      message: parsed.data.message,
-      source: parsed.data.context ?? parsed.data.intent ?? "web"
-    }
-  });
+    const lead = await prisma.lead.create({
+      data: {
+        name: parsed.name,
+        email: parsed.email,
+        phone: parsed.phone,
+        company: parsed.company,
+        message: parsed.message,
+        source: parsed.context ?? parsed.intent ?? "web"
+      }
+    });
 
-  return NextResponse.json({ ok: true, id: lead.id });
+    return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export function GET() {
+  return fail("Metodo no permitido", 405);
 }
