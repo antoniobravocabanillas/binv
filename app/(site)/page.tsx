@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, MessageCircle, ShieldCheck, SlidersHorizontal, Wrench } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
+import { ArrowRight, CheckCircle2, MessageCircle, Radar, Ruler, ShieldCheck, SlidersHorizontal, Wrench } from "lucide-react";
+import { HomeHero3D } from "@/components/home-hero-3d";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,18 +19,31 @@ const advantages = [
   { icon: CheckCircle2, title: "Compra B2B ordenada", text: "Cotizaciones claras para compras corporativas y proyectos exigentes." }
 ];
 
+const heroMetrics = [
+  { icon: Ruler, value: "12+", label: "anos de experiencia tecnica" },
+  { icon: Radar, value: "QA/QC", label: "entregables auditables" },
+  { icon: ShieldCheck, value: "B2B", label: "compras, alquiler y soporte" },
+  { icon: SlidersHorizontal, value: "360", label: "servicios, equipos y calibracion" }
+];
+
 export default function HomePage() {
   return (
     <>
-      <section className="technical-grid border-b">
-        <div className="container grid min-h-[680px] items-center gap-12 py-16 lg:grid-cols-[1.1fr_0.9fr]">
-          <div>
-            <Badge variant="accent">{brand.descriptor}</Badge>
-            <h1 className="mt-5 max-w-4xl font-display text-4xl font-bold leading-[1.02] md:text-6xl">
-              Ingenieria y topografia profesional para construir, medir y decidir con precision.
+      <section className="relative isolate overflow-hidden border-b bg-[#03111D] text-white">
+        <HomeHero3D />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,17,29,0.96)_0%,rgba(3,17,29,0.78)_42%,rgba(3,17,29,0.18)_100%)]" />
+        <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(36,200,238,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(36,200,238,0.11)_1px,transparent_1px)] [background-size:44px_44px]" />
+        <div className="container relative grid min-h-[calc(100svh-8rem)] items-center gap-10 py-12 lg:grid-cols-[0.98fr_1.02fr]">
+          <div className="max-w-3xl">
+            <Badge className="bg-white text-[#063D63] hover:bg-white">{brand.descriptor}</Badge>
+            <h1 className="mt-5 font-display text-5xl font-bold leading-[0.96] text-white md:text-7xl">
+              ICC Topografia Group S.A.C.
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-              {brand.name} integra servicios de campo, consultoria, venta de equipos, soporte, calibracion y capacitacion para proyectos que necesitan datos confiables y respaldo especializado.
+            <p className="mt-5 max-w-2xl text-2xl font-semibold leading-tight text-[#7DE4FF] md:text-3xl">
+              Topografia, geodesia e instrumentacion para proyectos criticos.
+            </p>
+            <p className="mt-6 max-w-2xl text-base leading-8 text-white/74 md:text-lg">
+              Integramos servicios de campo, consultoria, venta tecnica, alquiler, calibracion y soporte para obras que necesitan datos confiables, equipos correctos y trazabilidad real.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
@@ -39,7 +52,7 @@ export default function HomePage() {
               <Button asChild size="lg" variant="secondary">
                 <Link href="/tienda">Ver tienda tecnica</Link>
               </Button>
-              <Button asChild size="lg" variant="outline">
+              <Button asChild size="lg" variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/18">
                 <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "51999999999"}`}>
                   <MessageCircle className="h-4 w-4" />
                   Hablar con asesor
@@ -47,19 +60,14 @@ export default function HomePage() {
               </Button>
             </div>
           </div>
-          <div className="rounded-lg border bg-card p-5 shadow-technical">
-            <div className="rounded-md bg-[#063D63] p-6 text-white">
-              <BrandLogo className="h-28 w-full" priority />
-              <p className="mt-6 text-sm font-semibold uppercase tracking-wider text-white/65">{brand.tagline}</p>
-              <div className="mt-6 grid gap-4">
-                {[
-                  ["12+", "años de experiencia tecnica"],
-                  ["QA/QC", "entregables auditables"],
-                  ["B2B", "compras, alquiler y soporte"],
-                  ["360°", "servicios, equipos y calibracion"]
-                ].map(([value, label]) => (
-                  <div key={label} className="flex items-center justify-between border-b border-white/12 pb-3">
-                    <span className="text-3xl font-bold text-[#12B5DC]">{value}</span>
+          <div className="hidden justify-self-end lg:block">
+            <div className="w-[390px] border-y border-white/18 py-5 text-white">
+              <p className="text-xs font-semibold uppercase text-white/58">{brand.tagline}</p>
+              <div className="mt-5 grid gap-5">
+                {heroMetrics.map(({ icon: Icon, value, label }) => (
+                  <div key={label} className="grid grid-cols-[34px_96px_1fr] items-center gap-4 border-b border-white/12 pb-4 last:border-b-0 last:pb-0">
+                    <Icon className="h-5 w-5 text-[#24C8EE]" />
+                    <span className="font-display text-3xl font-bold text-[#24C8EE]">{value}</span>
                     <span className="text-sm text-white/72">{label}</span>
                   </div>
                 ))}
@@ -70,7 +78,7 @@ export default function HomePage() {
       </section>
 
       <section className="container py-16">
-        <SectionHeading eyebrow="Servicios destacados" title="Cobertura tecnica de campo, gabinete y soporte" description="Servicios diseñados para reducir riesgo operativo, mejorar trazabilidad y acelerar decisiones tecnicas." />
+        <SectionHeading eyebrow="Servicios destacados" title="Cobertura tecnica de campo, gabinete y soporte" description="Servicios disenados para reducir riesgo operativo, mejorar trazabilidad y acelerar decisiones tecnicas." />
         <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {services.slice(0, 8).map((service) => (
             <Card key={service.slug}>
@@ -105,7 +113,7 @@ export default function HomePage() {
       </section>
 
       <section className="container grid gap-8 py-16 lg:grid-cols-[0.9fr_1.1fr]">
-        <SectionHeading eyebrow="Ventajas competitivas" title="La venta tecnica no termina en la factura" description="Cada compra, alquiler o servicio se acompaña con criterio de aplicacion, puesta en marcha y respaldo postventa." />
+        <SectionHeading eyebrow="Ventajas competitivas" title="La venta tecnica no termina en la factura" description="Cada compra, alquiler o servicio se acompana con criterio de aplicacion, puesta en marcha y respaldo postventa." />
         <div className="grid gap-4 sm:grid-cols-2">
           {advantages.map(({ icon: Icon, title, text }) => (
             <Card key={title}>
@@ -176,7 +184,7 @@ export default function HomePage() {
           {testimonials.map((testimonial) => (
             <blockquote key={testimonial.author} className="rounded-lg border bg-background p-6 shadow-technical">
               <p className="text-lg leading-8">&ldquo;{testimonial.quote}&rdquo;</p>
-              <footer className="mt-5 text-sm text-muted-foreground">{testimonial.author} · {testimonial.company}</footer>
+              <footer className="mt-5 text-sm text-muted-foreground">{testimonial.author} - {testimonial.company}</footer>
             </blockquote>
           ))}
         </div>
