@@ -103,16 +103,32 @@ export function ProductGallery({ images, productName, brand, model, badge, requi
       ) : null}
 
       {isZoomOpen && activeImage ? (
-        <div className="fixed inset-0 z-50 bg-slate-950/92 p-4" role="dialog" aria-modal="true" aria-label={`Galeria ampliada de ${productName}`}>
-          <div className="mx-auto flex h-full max-w-7xl flex-col">
+        <div
+          className="fixed inset-0 z-[100] bg-slate-950/92 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Galeria ampliada de ${productName}`}
+          onClick={() => setIsZoomOpen(false)}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Cerrar galeria"
+            className="fixed right-4 top-4 z-[110] h-11 border-white/70 bg-white px-4 text-slate-950 shadow-lg hover:bg-white/90 md:right-6 md:top-6"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsZoomOpen(false);
+            }}
+          >
+            <X className="h-4 w-4" />
+            Cerrar
+          </Button>
+          <div className="mx-auto flex h-full max-w-7xl flex-col" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between gap-4 pb-4 text-white">
               <div>
                 <p className="text-xs font-semibold uppercase text-white/62">{brand}{model ? ` - ${model}` : ""}</p>
                 <p className="text-lg font-bold">{productName}</p>
               </div>
-              <Button type="button" variant="outline" size="icon" aria-label="Cerrar galeria" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => setIsZoomOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
             </div>
             <div className="relative min-h-0 flex-1 rounded-lg bg-white">
               <Image src={activeImage} alt={`${productName} ampliado`} fill sizes="100vw" className="object-contain p-4 md:p-8" />
