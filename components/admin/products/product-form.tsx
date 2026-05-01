@@ -2,6 +2,7 @@ import type { Category, Product } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ProductImageUploader } from "@/components/admin/products/product-image-uploader";
 
 type ProductFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -13,7 +14,7 @@ export function ProductForm({ action, categories, product }: ProductFormProps) {
   const specs = product?.specifications && typeof product.specifications === "object" && !Array.isArray(product.specifications)
     ? Object.entries(product.specifications as Record<string, string>).map(([key, value]) => `${key}: ${value}`).join("\n")
     : "";
-  const images = product?.images?.length ? product.images.join("\n") : "";
+  const images = product?.images || [];
 
   return (
     <form action={action} className="grid gap-5 rounded-lg border bg-card p-6 shadow-technical">
@@ -40,14 +41,7 @@ export function ProductForm({ action, categories, product }: ProductFormProps) {
       <Field label="Especificaciones tecnicas">
         <Textarea name="specifications" defaultValue={specs} placeholder={"Precision: 5 segundos\nAlcance: 500 m"} />
       </Field>
-      <Field label="Imagenes del producto">
-        <Textarea
-          name="images"
-          defaultValue={images}
-          placeholder={"https://cdn.ejemplo.com/estacion-total-frontal.jpg\nhttps://cdn.ejemplo.com/estacion-total-kit.jpg"}
-          rows={4}
-        />
-      </Field>
+      <ProductImageUploader initialImages={images} />
       <Field label="Ficha tecnica URL"><Input name="technicalSheet" defaultValue={product?.technicalSheet || ""} /></Field>
 
       <label className="flex items-center gap-3 text-sm font-medium">

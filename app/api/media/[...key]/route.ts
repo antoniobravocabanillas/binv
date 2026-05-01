@@ -1,0 +1,36 @@
+import { fail, handleApiError } from "@/lib/server/api";
+import { getProductMediaStore, PRODUCT_IMAGE_PREFIX } from "@/lib/server/media";
+
+type MediaRouteProps = {
+  params: Promise<{ key: string[] }>;
+};
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(_request: Request, { params }: MediaRouteProps) {
+  try {
+    const { key: keyParts } = await params;
+    const key = keyParts.join("/");
+
+    if (!key.startsWith(`${PRODUCT_IMAGE_PREFIX}/`)) {
+      return fail("Archivo no permitido", 403);
+    }
+
+    const store = getProductMediaStore();
+    const entry = await store.getWithMetadata(key, { type: "arrayBuffer" });
+    if (!entry) return fail("Archivo no encontrado", 404);
+
+    const contentType = typeof entry.metadata.contentType === "string" ? entry.metadata.contentType : "application/octet-stream";
+
+    return new Response(entry.data, {
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000, immutable",
+        ETag: entry.etag || ""
+      }
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
