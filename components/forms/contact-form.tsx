@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,14 +12,20 @@ type ContactFormProps = {
 
 export function ContactForm({ intent = "contact", context }: ContactFormProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const submittedRef = useRef(false);
 
   async function submit(formData: FormData) {
+    if (submittedRef.current || status === "loading" || status === "success") return;
+    submittedRef.current = true;
     setStatus("loading");
+
     const endpoint = intent === "quote" || intent === "service" || intent === "product" ? "/api/quote" : "/api/contact";
     formData.set("intent", intent);
     if (context) formData.set("context", context);
+
     const response = await fetch(endpoint, { method: "POST", body: formData });
     setStatus(response.ok ? "success" : "error");
+    if (!response.ok) submittedRef.current = false;
   }
 
   return (
@@ -32,9 +38,9 @@ export function ContactForm({ intent = "contact", context }: ContactFormProps) {
         <Input name="company" placeholder="Empresa" autoComplete="organization" />
         <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
       </div>
-      <Textarea required name="message" placeholder="Cuéntanos el equipo, servicio o alcance que necesitas" />
-      <Button disabled={status === "loading"} type="submit">
-        {status === "loading" ? "Enviando..." : "Enviar solicitud"}
+      <Textarea required name="message" placeholder="Cuentanos el equipo, servicio o alcance que necesitas" />
+      <Button disabled={status === "loading" || status === "success"} type="submit">
+        {status === "loading" ? "Enviando..." : status === "success" ? "Solicitud enviada" : "Enviar solicitud"}
       </Button>
       {status === "success" ? <p className="text-sm font-medium text-accent">Solicitud registrada. Un asesor tecnico la revisara.</p> : null}
       {status === "error" ? <p className="text-sm font-medium text-destructive">No pudimos registrar la solicitud. Intentalo nuevamente.</p> : null}
