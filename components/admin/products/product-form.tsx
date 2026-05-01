@@ -13,6 +13,7 @@ export function ProductForm({ action, categories, product }: ProductFormProps) {
   const specs = product?.specifications && typeof product.specifications === "object" && !Array.isArray(product.specifications)
     ? Object.entries(product.specifications as Record<string, string>).map(([key, value]) => `${key}: ${value}`).join("\n")
     : "";
+  const images = product?.images?.length ? product.images.join("\n") : "";
 
   return (
     <form action={action} className="grid gap-5 rounded-lg border bg-card p-6 shadow-technical">
@@ -38,6 +39,14 @@ export function ProductForm({ action, categories, product }: ProductFormProps) {
       <Field label="Descripcion"><Textarea name="description" required defaultValue={product?.description || ""} /></Field>
       <Field label="Especificaciones tecnicas">
         <Textarea name="specifications" defaultValue={specs} placeholder={"Precision: 5 segundos\nAlcance: 500 m"} />
+      </Field>
+      <Field label="Imagenes del producto">
+        <Textarea
+          name="images"
+          defaultValue={images}
+          placeholder={"https://cdn.ejemplo.com/estacion-total-frontal.jpg\nhttps://cdn.ejemplo.com/estacion-total-kit.jpg"}
+          rows={4}
+        />
       </Field>
       <Field label="Ficha tecnica URL"><Input name="technicalSheet" defaultValue={product?.technicalSheet || ""} /></Field>
 

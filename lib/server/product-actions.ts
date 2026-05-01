@@ -21,6 +21,16 @@ function parseSpecifications(value?: string) {
   }, {});
 }
 
+function parseUrlList(value?: string) {
+  if (!value) return [];
+
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => item.startsWith("/") || item.startsWith("https://"));
+}
+
 function productDataFromForm(formData: FormData) {
   const name = formValue(formData, "name");
   const sku = formValue(formData, "sku");
@@ -53,7 +63,7 @@ function productDataFromForm(formData: FormData) {
     availability,
     badge: formValue(formData, "badge"),
     technicalSheet: formValue(formData, "technicalSheet"),
-    images: [],
+    images: parseUrlList(formValue(formData, "images")),
     specifications: parseSpecifications(formValue(formData, "specifications")),
     categoryId
   };
@@ -67,11 +77,13 @@ export async function createProductAction(formData: FormData) {
 }
 
 export async function updateProductAction(id: string, formData: FormData) {
+  const data = productDataFromForm(formData);
   await prisma.product.update({
     where: { id },
-    data: productDataFromForm(formData)
+    data
   });
   revalidatePath("/tienda");
+  revalidatePath(`/tienda/${data.slug}`);
   revalidatePath("/admin/productos");
   redirect("/admin/productos");
 }
