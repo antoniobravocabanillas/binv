@@ -1,8 +1,10 @@
 import { ProductForm } from "@/components/admin/products/product-form";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { createProductAction } from "@/lib/server/product-actions";
 
 export default async function NewProductPage() {
+  await requireAdminPage(["EDITOR", "ADMIN"]);
   const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
 
   return (

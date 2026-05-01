@@ -5,22 +5,23 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { brand } from "@/lib/brand";
 
 const adminNav = [
-  ["Dashboard", "/admin"],
-  ["Productos", "/admin/productos"],
-  ["Pedidos", "/admin/pedidos"],
-  ["Contenidos", "/admin/contenidos"],
-  ["Chat", "/admin/chat"],
-  ["Equipo", "/admin/equipo"],
-  ["Leads", "/admin/leads"]
+  { label: "Dashboard", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN"] },
+  { label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN"] },
+  { label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN"] },
+  { label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN"] },
+  { label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN"] },
+  { label: "Equipo", href: "/admin/equipo", roles: ["ADMIN"] },
+  { label: "Leads", href: "/admin/leads", roles: ["SALES", "ADMIN"] }
 ];
 
-const allowedRoles = new Set(["SALES", "EDITOR", "ADMIN"]);
+const allowedRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
 
   if (!session?.user) redirect("/cuenta?callbackUrl=/admin");
   if (!allowedRoles.has(session.user.role || "")) redirect("/");
+  const navItems = adminNav.filter((item) => item.roles.includes(session.user.role || ""));
 
   return (
     <div className="min-h-screen bg-[#f7f6f1]">
@@ -28,7 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="font-bold">{brand.shortName} Admin</div>
         <p className="mt-2 text-xs text-white/60">{session.user.email}</p>
         <nav className="mt-8 space-y-2">
-          {adminNav.map(([label, href]) => <Link key={href} href={href} className="block rounded-md px-3 py-2 text-sm text-white/72 hover:bg-white/10 hover:text-white">{label}</Link>)}
+          {navItems.map((item) => <Link key={item.href} href={item.href} className="block rounded-md px-3 py-2 text-sm text-white/72 hover:bg-white/10 hover:text-white">{item.label}</Link>)}
         </nav>
         <div className="absolute bottom-5 left-5 right-5">
           <SignOutButton />

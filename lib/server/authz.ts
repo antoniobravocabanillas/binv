@@ -4,6 +4,7 @@ import { fail } from "@/lib/server/api";
 
 const roleRank: Record<Role, number> = {
   CUSTOMER: 0,
+  TECHNICIAN: 1,
   SALES: 1,
   EDITOR: 2,
   ADMIN: 3

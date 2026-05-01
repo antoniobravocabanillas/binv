@@ -1,4 +1,4 @@
-import { StaffDepartment } from "@prisma/client";
+import { Role, StaffDepartment } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +8,11 @@ import { prisma } from "@/lib/prisma";
 import {
   createStaffProfileAction,
   deleteStaffProfileAction,
-  updateStaffProfileAction
+  unlinkStaffAccessAction,
+  updateStaffProfileAction,
+  upsertStaffAccessAction
 } from "@/lib/server/admin-actions";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const departments: Array<[StaffDepartment, string]> = [
   ["SALES", "Ventas tecnicas"],
@@ -17,6 +20,13 @@ const departments: Array<[StaffDepartment, string]> = [
   ["FIELD_ENGINEERING", "Campo e ingenieria"],
   ["RENTAL_SERVICE", "Alquiler y servicio"],
   ["ADMINISTRATION", "Administracion"]
+];
+
+const accessRoles: Array<[Role, string]> = [
+  ["TECHNICIAN", "Tecnico"],
+  ["SALES", "Vendedor"],
+  ["EDITOR", "Editor"],
+  ["ADMIN", "Admin"]
 ];
 
 type StaffTools = {
@@ -29,7 +39,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminTeamPage() {
+  await requireAdminPage(["ADMIN"]);
   const profiles = await prisma.staffProfile.findMany({
+    include: { user: true },
     orderBy: [{ active: "desc" }, { department: "asc" }, { displayName: "asc" }]
   });
 
@@ -85,6 +97,12 @@ export default async function AdminTeamPage() {
                     active: profile.active
                   }}
                 />
+                <AccessForm
+                  profileId={profile.id}
+                  user={profile.user}
+                  defaultEmail={profile.user?.email || profile.email || ""}
+                  defaultRole={(profile.user?.role as Role | undefined) || (profile.department === "TECHNICAL_SUPPORT" ? "TECHNICIAN" : "SALES")}
+                />
                 <form action={deleteStaffProfileAction.bind(null, profile.id)}>
                   <Button type="submit" variant="destructive">Eliminar perfil</Button>
                 </form>
@@ -94,6 +112,47 @@ export default async function AdminTeamPage() {
         })}
       </div>
     </section>
+  );
+}
+
+function AccessForm({
+  profileId,
+  user,
+  defaultEmail,
+  defaultRole
+}: {
+  profileId: string;
+  user: { email: string; role: Role } | null;
+  defaultEmail: string;
+  defaultRole: Role;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/30 p-4">
+      <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
+        <div>
+          <h3 className="font-semibold">Acceso al panel</h3>
+          <p className="text-sm text-muted-foreground">
+            {user ? `Usuario vinculado: ${user.email} | Rol ${roleLabel(user.role)}` : "Sin usuario vinculado. Crea un acceso con contrasena temporal."}
+          </p>
+        </div>
+        {user ? (
+          <form action={unlinkStaffAccessAction.bind(null, profileId)}>
+            <Button type="submit" variant="outline">Desvincular</Button>
+          </form>
+        ) : null}
+      </div>
+      <form action={upsertStaffAccessAction.bind(null, profileId)} className="grid gap-3 md:grid-cols-[1fr_180px_1fr_auto]">
+        <Input name="accessEmail" type="email" placeholder="Correo de acceso" defaultValue={defaultEmail} required />
+        <select name="role" defaultValue={defaultRole} className="h-11 rounded-md border bg-background px-3 text-sm">
+          {accessRoles.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <Input name="temporaryPassword" type="text" placeholder={user ? "Nueva contrasena temporal opcional" : "Contrasena temporal"} required={!user} />
+        <Button type="submit">{user ? "Actualizar acceso" : "Crear acceso"}</Button>
+      </form>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        El usuario entra por /cuenta. Si es vendedor o tecnico, solo vera su panel operativo y los chats asignados a su perfil.
+      </p>
+    </div>
   );
 }
 
@@ -143,4 +202,8 @@ function StaffProfileForm({
 
 function departmentLabel(department: StaffDepartment) {
   return departments.find(([value]) => value === department)?.[1] || department;
+}
+
+function roleLabel(role: Role) {
+  return accessRoles.find(([value]) => value === role)?.[1] || role;
 }

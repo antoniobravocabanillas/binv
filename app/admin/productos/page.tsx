@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import { formatCurrency } from "@/lib/utils";
 
 export default async function AdminProductsPage() {
+  await requireAdminPage(["EDITOR", "ADMIN"]);
   const products = await prisma.product.findMany({
     where: { isActive: true },
     include: { category: true },

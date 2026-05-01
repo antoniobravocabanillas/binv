@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
 import {
   createBannerAction,
   createCmsPageAction,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/server/admin-actions";
 
 export default async function AdminContentPage() {
+  await requireAdminPage(["EDITOR", "ADMIN"]);
   const [services, posts, faqs, testimonials, banners, pages] = await Promise.all([
     prisma.service.findMany({ orderBy: { updatedAt: "desc" } }),
     prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }),

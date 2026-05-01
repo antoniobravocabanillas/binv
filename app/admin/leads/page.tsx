@@ -3,10 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { deleteLeadAction, updateLeadStatusAction } from "@/lib/server/admin-actions";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const leadStatuses = ["NEW", "CONTACTED", "QUALIFIED", "WON", "LOST"] as const;
 
 export default async function AdminLeadsPage() {
+  await requireAdminPage(["SALES", "ADMIN"]);
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
     take: 100

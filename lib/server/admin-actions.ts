@@ -1,7 +1,8 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
-import { Prisma, StaffDepartment } from "@prisma/client";
+import { Prisma, Role, StaffDepartment } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -38,6 +39,22 @@ function staffToolsFromForm(formData: FormData) {
     checklist: listFromTextarea(formData, "checklist"),
     nextSteps: listFromTextarea(formData, "nextSteps")
   };
+}
+
+async function requireActionRole(allowedRoles: Role[]) {
+  const session = await auth();
+  const role = session?.user?.role as Role | undefined;
+
+  if (!session?.user?.id || !role || !allowedRoles.includes(role)) {
+    throw new Error("Permisos insuficientes.");
+  }
+
+  return { session, role };
+}
+
+function roleFromForm(formData: FormData) {
+  const role = value(formData, "role") as Role | undefined;
+  return role && ["TECHNICIAN", "SALES", "EDITOR", "ADMIN"].includes(role) ? role : "SALES";
 }
 
 export async function deleteLeadAction(id: string) {
@@ -294,7 +311,7 @@ export async function deleteCmsPageAction(id: string) {
 }
 
 export async function takeChatConversationAction(id: string) {
-  const session = await auth();
+  const { session } = await requireActionRole(["EDITOR", "ADMIN"]);
   const profile = session?.user?.id
     ? await prisma.staffProfile.findUnique({ where: { userId: session.user.id } })
     : null;
@@ -310,20 +327,30 @@ export async function takeChatConversationAction(id: string) {
 }
 
 export async function assignChatProfileAction(id: string, formData: FormData) {
+  await requireActionRole(["EDITOR", "ADMIN"]);
   const profileId = value(formData, "profileId");
-  const session = await auth();
 
   await prisma.chatConversation.update({
     where: { id },
     data: {
       assignedProfileId: profileId || null,
-      assignedToId: session?.user?.id || undefined
+      assignedToId: undefined
     }
   });
   revalidatePath("/admin/chat");
 }
 
 export async function closeChatConversationAction(id: string) {
+  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+  if (role !== "ADMIN" && role !== "EDITOR") {
+    const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+    const conversation = await prisma.chatConversation.findUnique({
+      where: { id },
+      select: { assignedProfileId: true, assignedToId: true }
+    });
+    const canClose = conversation?.assignedToId === session.user.id || (profile?.id && conversation?.assignedProfileId === profile.id);
+    if (!canClose) throw new Error("Este chat no esta asignado a tu perfil.");
+  }
   await prisma.chatConversation.update({
     where: { id },
     data: { status: "CLOSED" }
@@ -332,6 +359,7 @@ export async function closeChatConversationAction(id: string) {
 }
 
 export async function deleteChatConversationAction(id: string) {
+  await requireActionRole(["EDITOR", "ADMIN"]);
   await prisma.chatConversation.delete({ where: { id } });
   revalidatePath("/admin/chat");
   revalidatePath("/admin");
@@ -340,14 +368,19 @@ export async function deleteChatConversationAction(id: string) {
 export async function sendAdminChatMessageAction(id: string, formData: FormData) {
   const body = value(formData, "body");
   if (!body) return;
-  const session = await auth();
-  const profile = session?.user?.id
-    ? await prisma.staffProfile.findUnique({ where: { userId: session.user.id } })
-    : null;
+  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+  const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
   const conversation = await prisma.chatConversation.findUnique({
     where: { id },
-    select: { assignedProfileId: true }
+    select: { assignedProfileId: true, assignedToId: true }
   });
+  const canManageAnyChat = role === "ADMIN" || role === "EDITOR";
+  const canReply =
+    canManageAnyChat ||
+    conversation?.assignedToId === session.user.id ||
+    (profile?.id && conversation?.assignedProfileId === profile.id);
+
+  if (!canReply) throw new Error("Este chat no esta asignado a tu perfil.");
 
   await prisma.chatConversation.update({
     where: { id },
@@ -367,6 +400,7 @@ export async function sendAdminChatMessageAction(id: string, formData: FormData)
 }
 
 export async function createStaffProfileAction(formData: FormData) {
+  await requireActionRole(["ADMIN"]);
   await prisma.staffProfile.create({
     data: {
       displayName: value(formData, "displayName") || "",
@@ -384,6 +418,7 @@ export async function createStaffProfileAction(formData: FormData) {
 }
 
 export async function updateStaffProfileAction(id: string, formData: FormData) {
+  await requireActionRole(["ADMIN"]);
   await prisma.staffProfile.update({
     where: { id },
     data: {
@@ -402,7 +437,75 @@ export async function updateStaffProfileAction(id: string, formData: FormData) {
 }
 
 export async function deleteStaffProfileAction(id: string) {
+  await requireActionRole(["ADMIN"]);
   await prisma.staffProfile.delete({ where: { id } });
+  revalidatePath("/admin/equipo");
+  revalidatePath("/admin/chat");
+}
+
+export async function upsertStaffAccessAction(profileId: string, formData: FormData) {
+  await requireActionRole(["ADMIN"]);
+
+  const profile = await prisma.staffProfile.findUnique({
+    where: { id: profileId },
+    include: { user: true }
+  });
+  if (!profile) throw new Error("Perfil no encontrado.");
+
+  const email = value(formData, "accessEmail") || profile.email;
+  const temporaryPassword = value(formData, "temporaryPassword");
+  const role = roleFromForm(formData);
+  if (!email) throw new Error("El correo de acceso es obligatorio.");
+
+  const data: Prisma.UserUpdateInput = {
+    name: profile.displayName,
+    email,
+    role
+  };
+
+  if (temporaryPassword) {
+    data.passwordHash = await bcrypt.hash(temporaryPassword, 12);
+  }
+
+  let userId = profile.userId;
+  if (profile.userId) {
+    await prisma.user.update({ where: { id: profile.userId }, data });
+  } else {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      await prisma.user.update({ where: { id: existingUser.id }, data });
+      userId = existingUser.id;
+    } else {
+      if (!temporaryPassword) throw new Error("La contraseña temporal es obligatoria para crear un acceso nuevo.");
+      const user = await prisma.user.create({
+        data: {
+          name: profile.displayName,
+          email,
+          passwordHash: await bcrypt.hash(temporaryPassword, 12),
+          role
+        }
+      });
+      userId = user.id;
+    }
+  }
+
+  await prisma.staffProfile.update({
+    where: { id: profileId },
+    data: {
+      userId,
+      email: profile.email || email
+    }
+  });
+  revalidatePath("/admin/equipo");
+  revalidatePath("/admin/chat");
+}
+
+export async function unlinkStaffAccessAction(profileId: string) {
+  await requireActionRole(["ADMIN"]);
+  await prisma.staffProfile.update({
+    where: { id: profileId },
+    data: { userId: null }
+  });
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Role } from "@prisma/client";
 import { MessageCircle, Trash2, UserRoundCheck } from "lucide-react";
 import { AdminChatReplyForm } from "@/components/admin/chat/admin-chat-reply-form";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
   sendAdminChatMessageAction,
   takeChatConversationAction
 } from "@/lib/server/admin-actions";
+import { canManageAdmin, requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const statusLabels = {
   WAITING: "Esperando respuesta",
@@ -29,8 +31,21 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminChatPage() {
+  const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+  const role = session.user.role as Role;
+  const canManage = canManageAdmin(role);
+  const currentProfile = await prisma.staffProfile.findUnique({
+    where: { userId: session.user.id }
+  });
+  const conversationWhere = canManage
+    ? {}
+    : currentProfile
+      ? { OR: [{ assignedProfileId: currentProfile.id }, { assignedToId: session.user.id }] }
+      : { id: "__no_profile__" };
+
   const [conversations, profiles] = await Promise.all([
     prisma.chatConversation.findMany({
+      where: conversationWhere,
       include: {
         assignedTo: true,
         assignedProfile: true,
@@ -39,10 +54,12 @@ export default async function AdminChatPage() {
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
       take: 80
     }),
-    prisma.staffProfile.findMany({
-      where: { active: true },
-      orderBy: [{ department: "asc" }, { displayName: "asc" }]
-    })
+    canManage
+      ? prisma.staffProfile.findMany({
+          where: { active: true },
+          orderBy: [{ department: "asc" }, { displayName: "asc" }]
+        })
+      : Promise.resolve([])
   ]);
 
   return (
@@ -55,9 +72,11 @@ export default async function AdminChatPage() {
             Toma conversaciones iniciadas desde el front, asigna el perfil correcto segun el tema y responde en vivo.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/admin/equipo">Gestionar perfiles</Link>
-        </Button>
+        {canManage ? (
+          <Button asChild variant="outline">
+            <Link href="/admin/equipo">Gestionar perfiles</Link>
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
@@ -69,6 +88,7 @@ export default async function AdminChatPage() {
             const replyAction = sendAdminChatMessageAction.bind(null, conversation.id);
             const assignAction = assignChatProfileAction.bind(null, conversation.id);
             const hasAdminReply = conversation.messages.some((message) => message.sender === "admin");
+            const canReply = canManage || conversation.assignedProfileId === currentProfile?.id || conversation.assignedToId === session.user.id;
 
             return (
               <Card key={conversation.id}>
@@ -92,28 +112,30 @@ export default async function AdminChatPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 lg:grid-cols-[1fr_auto]">
-                    <form action={assignAction} className="grid gap-2 md:grid-cols-[1fr_auto]">
-                      <select name="profileId" defaultValue={conversation.assignedProfileId || ""} className="h-11 rounded-md border bg-background px-3 text-sm">
-                        <option value="">Sin perfil asignado</option>
-                        {profiles.map((profile) => (
-                          <option key={profile.id} value={profile.id}>
-                            {profile.displayName} - {profile.roleTitle}
-                          </option>
-                        ))}
-                      </select>
-                      <Button type="submit" variant="outline">
-                        <UserRoundCheck className="h-4 w-4" />
-                        Asignar perfil
-                      </Button>
-                    </form>
-                    <form action={takeAction}>
-                      <Button type="submit" variant="secondary">
-                        <MessageCircle className="h-4 w-4" />
-                        Tomar chat
-                      </Button>
-                    </form>
-                  </div>
+                  {canManage ? (
+                    <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 lg:grid-cols-[1fr_auto]">
+                      <form action={assignAction} className="grid gap-2 md:grid-cols-[1fr_auto]">
+                        <select name="profileId" defaultValue={conversation.assignedProfileId || ""} className="h-11 rounded-md border bg-background px-3 text-sm">
+                          <option value="">Sin perfil asignado</option>
+                          {profiles.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.displayName} - {profile.roleTitle}
+                            </option>
+                          ))}
+                        </select>
+                        <Button type="submit" variant="outline">
+                          <UserRoundCheck className="h-4 w-4" />
+                          Asignar perfil
+                        </Button>
+                      </form>
+                      <form action={takeAction}>
+                        <Button type="submit" variant="secondary">
+                          <MessageCircle className="h-4 w-4" />
+                          Tomar chat
+                        </Button>
+                      </form>
+                    </div>
+                  ) : null}
 
                   <div className="max-h-[360px] space-y-3 overflow-auto rounded-lg border bg-muted/30 p-4">
                     {conversation.messages.map((message) => (
@@ -132,31 +154,35 @@ export default async function AdminChatPage() {
                   ) : null}
 
                   <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-                    <AdminChatReplyForm replyAction={replyAction} />
+                    {canReply ? <AdminChatReplyForm replyAction={replyAction} /> : <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">Este chat no esta asignado a tu perfil.</p>}
                     <div className="flex flex-wrap gap-2">
                       {conversation.status !== "CLOSED" ? (
                         <form action={closeAction}>
                           <Button type="submit" variant="outline">Cerrar</Button>
                         </form>
                       ) : null}
-                      <form action={deleteAction}>
-                        <Button type="submit" variant="destructive" size="icon" aria-label="Eliminar conversacion">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </form>
+                      {canManage ? (
+                        <form action={deleteAction}>
+                          <Button type="submit" variant="destructive" size="icon" aria-label="Eliminar conversacion">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
               </Card>
             );
           }) : (
-            <Card>
-              <CardContent className="p-8 text-muted-foreground">Todavia no hay conversaciones iniciadas desde el front.</CardContent>
-            </Card>
-          )}
-        </div>
+          <Card>
+            <CardContent className="p-8 text-muted-foreground">
+              {canManage ? "Todavia no hay conversaciones iniciadas desde el front." : currentProfile ? "Todavia no tienes chats asignados a tu perfil." : "Tu usuario no tiene un perfil de equipo vinculado. Pide a un administrador que lo vincule en Equipo."}
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+        {canManage ? <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
           <Card>
             <CardHeader>
               <CardTitle>Perfiles disponibles</CardTitle>
@@ -180,7 +206,7 @@ export default async function AdminChatPage() {
               })}
             </CardContent>
           </Card>
-        </aside>
+        </aside> : null}
       </div>
     </section>
   );

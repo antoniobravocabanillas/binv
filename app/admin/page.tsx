@@ -3,8 +3,65 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 export default async function AdminPage() {
+  const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+  if (session.user.role === "TECHNICIAN") {
+    const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+    const assignedChats = profile
+      ? await prisma.chatConversation.findMany({
+          where: { assignedProfileId: profile.id },
+          include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+          orderBy: { updatedAt: "desc" },
+          take: 8
+        })
+      : [];
+
+    return (
+      <section>
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <h1 className="font-display text-3xl font-bold">Panel tecnico</h1>
+            <p className="mt-2 text-muted-foreground">{profile ? `Bandeja de ${profile.displayName}` : "Tu usuario aun no tiene perfil vinculado."}</p>
+          </div>
+          <Button asChild><Link href="/admin/chat">Ver mis chats</Link></Button>
+        </div>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardDescription>Asignados a tu perfil</CardDescription>
+              <CardTitle className="text-3xl">{assignedChats.length}</CardTitle>
+              <p className="text-sm font-semibold">Chats</p>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>Perfil operativo</CardDescription>
+              <CardTitle className="text-xl">{profile?.roleTitle || "Sin perfil"}</CardTitle>
+              <p className="text-sm font-semibold">Especialidad</p>
+            </CardHeader>
+          </Card>
+        </div>
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Mis chats recientes</CardTitle>
+            <CardDescription>Conversaciones asignadas por administracion comercial.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {assignedChats.map((chat) => (
+              <div key={chat.id} className="rounded-md border p-3">
+                <p className="font-semibold">{chat.customerName}</p>
+                <p className="text-sm text-muted-foreground">{chat.topic || "Consulta general"} | {chat.status}</p>
+              </div>
+            ))}
+            {!assignedChats.length ? <p className="text-sm text-muted-foreground">Todavia no tienes chats asignados.</p> : null}
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
+
   const [productCount, pendingOrders, newLeads, waitingChats, recentLeads] = await prisma.$transaction([
     prisma.product.count({ where: { isActive: true } }),
     prisma.order.count({ where: { status: "PENDING" } }),
