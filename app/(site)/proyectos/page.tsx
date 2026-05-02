@@ -5,6 +5,7 @@ import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { projects } from "@/lib/content/site";
+import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
 export const metadata = createMetadata({
@@ -15,7 +16,25 @@ export const metadata = createMetadata({
 
 const projectIcons = [MapPinned, Crosshair, BarChart3, FileCheck2];
 
-export default function ProjectsPage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function ProjectsPage() {
+  const dbProjects = await prisma.project.findMany({
+    where: { isPublic: true },
+    include: { images: { orderBy: { position: "asc" }, take: 1 } },
+    orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }]
+  });
+  const projectItems = dbProjects.length
+    ? dbProjects.map((project) => ({
+        title: project.title,
+        summary: project.summary,
+        sector: project.category || "Proyecto tecnico",
+        metric: project.results || "Entregables auditables",
+        slug: project.slug
+      }))
+    : projects.map((project) => ({ ...project, slug: "" }));
+
   return (
     <>
       <TechnicalPageHero
@@ -38,10 +57,11 @@ export default function ProjectsPage() {
         </ScrollReveal>
 
         <div className="mt-10 grid gap-5 md:grid-cols-2">
-          {projects.map((project, index) => {
+          {projectItems.map((project, index) => {
             const Icon = projectIcons[index % projectIcons.length];
             return (
               <ScrollReveal key={project.title} delay={index * 70}>
+                <Link href={project.slug ? `/proyectos/${project.slug}` : "/contacto"} className="block h-full">
                 <Card className="h-full overflow-hidden transition duration-300 hover:-translate-y-1 hover:border-primary/60 motion-reduce:transform-none">
                   <CardHeader>
                     <div className="flex items-start justify-between gap-4">
@@ -58,6 +78,7 @@ export default function ProjectsPage() {
                     <p className="mt-1 font-display text-3xl font-bold text-primary">{project.metric}</p>
                   </CardContent>
                 </Card>
+                </Link>
               </ScrollReveal>
             );
           })}

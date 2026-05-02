@@ -13,6 +13,12 @@ enum Role {
   SALES
   EDITOR
   ADMIN
+  SUPER_ADMIN
+  COMMERCIAL_ADMIN
+  SURVEYOR
+  ENGINEER
+  ARCHITECT
+  SUPPORT
 }
 
 enum OrderStatus {
@@ -29,8 +35,60 @@ enum LeadStatus {
   NEW
   CONTACTED
   QUALIFIED
+  EVALUATION
+  QUOTED
+  NEGOTIATION
   WON
   LOST
+  REQUIRES_TECH_SUPPORT
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum CommissionType {
+  SALE_PERCENTAGE
+  MARGIN_PERCENTAGE
+  FIXED_AMOUNT
+  CATEGORY_PERCENTAGE
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  FINISHED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProjectRole {
+  SURVEYOR
+  ENGINEER
+  ARCHITECT
+  SELLER
+  SUPPORT
+  MANAGER
 }
 
 enum ChatStatus {
@@ -62,8 +120,31 @@ model User {
   favorites     Favorite[]
   assignedChats ChatConversation[]
   staffProfile  StaffProfile?
+  clientProfile Client?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+}
+
+model Client {
+  id          String    @id @default(cuid())
+  userId      String?   @unique
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name        String
+  company     String?
+  document    String?
+  email       String    @unique
+  phone       String?
+  address     String?
+  contactName String?
+  status      String    @default("prospecto")
+  leads       Lead[]
+  quotes      Quote[]
+  projects    Project[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([email])
+  @@index([status])
 }
 
 model Account {
@@ -129,6 +210,14 @@ model Product {
   availability   String
   badge          String?
   images         String[]
+  mainImage      String?
+  manualUrl      String?
+  rentalPrice    Decimal?
+  commercialMode String           @default("venta")
+  location       String?
+  tags           String[]
+  isFeatured     Boolean          @default(false)
+  isVisible      Boolean          @default(true)
   technicalSheet String?
   specifications Json
   isActive       Boolean          @default(true)
@@ -136,6 +225,7 @@ model Product {
   category       Category         @relation(fields: [categoryId], references: [id])
   variants       ProductVariant[]
   orderItems     OrderItem[]
+  quoteItems     QuoteItem[]
   favorites      Favorite[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -297,19 +387,111 @@ model BlogPost {
 }
 
 model Lead {
-  id        String     @id @default(cuid())
-  name      String
-  email     String
-  phone     String?
-  company   String?
-  message   String
-  source    String?
-  status    LeadStatus @default(NEW)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                String        @id @default(cuid())
+  clientId          String?
+  client            Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  assignedProfileId String?
+  assignedProfile   StaffProfile? @relation("LeadAssignedProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  name              String
+  email             String
+  phone             String?
+  company           String?
+  message           String
+  source            String?
+  interest          String?
+  priority          LeadPriority  @default(MEDIUM)
+  estimatedValue    Decimal?
+  nextFollowUpAt    DateTime?
+  status            LeadStatus    @default(NEW)
+  notes             LeadNote[]
+  quotes            Quote[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@index([status, createdAt])
   @@index([email])
+  @@index([assignedProfileId])
+  @@index([clientId])
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model Quote {
+  id              String        @id @default(cuid())
+  number          String        @unique
+  clientId        String?
+  client          Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  leadId          String?
+  lead            Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  sellerProfileId String?
+  sellerProfile   StaffProfile? @relation("QuoteSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
+  customerName    String
+  customerEmail   String?
+  company         String?
+  status          QuoteStatus   @default(DRAFT)
+  currency        String        @default("USD")
+  subtotal        Decimal       @default(0)
+  discount        Decimal       @default(0)
+  tax             Decimal       @default(0)
+  total           Decimal       @default(0)
+  validUntil      DateTime?
+  terms           String?
+  deliveryTime    String?
+  observations    String?
+  items           QuoteItem[]
+  commissions     Commission[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([sellerProfileId])
+  @@index([clientId])
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  type        String   @default("product")
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @default(0)
+  discount    Decimal  @default(0)
+  subtotal    Decimal  @default(0)
+
+  @@index([quoteId])
+  @@index([productId])
+}
+
+model Commission {
+  id              String           @id @default(cuid())
+  quoteId         String?
+  quote           Quote?           @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  sellerProfileId String
+  sellerProfile   StaffProfile     @relation("CommissionSellerProfile", fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  type            CommissionType   @default(SALE_PERCENTAGE)
+  baseAmount      Decimal          @default(0)
+  rate            Decimal          @default(0)
+  amount          Decimal          @default(0)
+  status          CommissionStatus @default(PENDING)
+  paidAt          DateTime?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([sellerProfileId, status])
+  @@index([quoteId])
 }
 
 model ContactMessage {
@@ -359,20 +541,84 @@ model ChatMessage {
 }
 
 model StaffProfile {
-  id            String             @id @default(cuid())
-  userId        String?            @unique
-  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  displayName   String
-  email         String?            @unique
-  phone         String?
-  roleTitle     String
-  department    StaffDepartment    @default(SALES)
-  specialties   String[]
-  tools         Json
-  active        Boolean            @default(true)
-  assignedChats ChatConversation[]
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id              String             @id @default(cuid())
+  userId          String?            @unique
+  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  displayName     String
+  email           String?            @unique
+  phone           String?
+  roleTitle       String
+  department      StaffDepartment    @default(SALES)
+  avatar          String?
+  commissionType  CommissionType     @default(SALE_PERCENTAGE)
+  commissionRate  Decimal            @default(5)
+  fixedCommission Decimal            @default(0)
+  monthlyGoal     Decimal            @default(0)
+  territory       String?
+  internalNotes   String?
+  specialties     String[]
+  tools           Json
+  active          Boolean            @default(true)
+  assignedChats   ChatConversation[]
+  assignedLeads   Lead[]             @relation("LeadAssignedProfile")
+  quotes          Quote[]            @relation("QuoteSellerProfile")
+  commissions     Commission[]       @relation("CommissionSellerProfile")
+  projectMembers  ProjectMember[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([department, active])
+}
+
+model Project {
+  id              String          @id @default(cuid())
+  title           String
+  slug            String          @unique
+  clientId        String?
+  client          Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientName      String?
+  location        String?
+  category        String?
+  servicesApplied String[]
+  summary         String
+  description     String
+  challenge       String?
+  solution        String?
+  results         String?
+  status          ProjectStatus   @default(PLANNING)
+  isPublic        Boolean         @default(false)
+  isFeatured      Boolean         @default(false)
+  images          ProjectImage[]
+  members         ProjectMember[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([status, isPublic])
+  @@index([isFeatured])
+  @@index([clientId])
+}
+
+model ProjectImage {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([projectId, position])
+}
+
+model ProjectMember {
+  id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  staffProfileId String
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  role           ProjectRole  @default(SURVEYOR)
+  createdAt      DateTime     @default(now())
+
+  @@unique([projectId, staffProfileId, role])
+  @@index([staffProfileId])
 }

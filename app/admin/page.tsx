@@ -62,13 +62,34 @@ export default async function AdminPage() {
     );
   }
 
-  const [productCount, pendingOrders, newLeads, waitingChats, recentLeads] = await prisma.$transaction([
+  const [
+    productCount,
+    pendingOrders,
+    newLeads,
+    waitingChats,
+    recentLeads,
+    pendingQuotes,
+    wonQuotes,
+    lostQuotes,
+    acceptedQuoteSum,
+    pendingCommissions,
+    activeProjects,
+    rentableProducts
+  ] = await prisma.$transaction([
     prisma.product.count({ where: { isActive: true } }),
     prisma.order.count({ where: { status: "PENDING" } }),
     prisma.lead.count({ where: { status: "NEW" } }),
     prisma.chatConversation.count({ where: { status: "WAITING" } }),
-    prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 5 })
+    prisma.lead.findMany({ include: { assignedProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }),
+    prisma.quote.count({ where: { status: { in: ["DRAFT", "SENT", "VIEWED"] } } }),
+    prisma.quote.count({ where: { status: "ACCEPTED" } }),
+    prisma.quote.count({ where: { status: "REJECTED" } }),
+    prisma.quote.aggregate({ where: { status: "ACCEPTED" }, _sum: { total: true } }),
+    prisma.commission.count({ where: { status: { in: ["PENDING", "APPROVED"] } } }),
+    prisma.project.count({ where: { status: { in: ["PLANNING", "IN_PROGRESS"] } } }),
+    prisma.product.count({ where: { isActive: true, commercialMode: { in: ["alquiler", "ambos"] } } })
   ]);
+  const conversionRate = wonQuotes + lostQuotes ? Math.round((wonQuotes / (wonQuotes + lostQuotes)) * 100) : 0;
 
   return (
     <section>
@@ -77,7 +98,9 @@ export default async function AdminPage() {
           <h1 className="font-display text-3xl font-bold">Panel administrativo</h1>
           <p className="mt-2 text-muted-foreground">Resumen comercial y operativo de ICC Topografia.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline"><Link href="/admin/cotizaciones">Cotizaciones</Link></Button>
+          <Button asChild variant="outline"><Link href="/admin/ventas">Ventas</Link></Button>
           <Button asChild variant="outline"><Link href="/admin/chat">Ver chat</Link></Button>
           <Button asChild><Link href="/admin/leads">Ver leads</Link></Button>
         </div>
@@ -88,7 +111,13 @@ export default async function AdminPage() {
           ["Productos", productCount, "Catalogo tecnico"],
           ["Pedidos pendientes", pendingOrders, "Ordenes por revisar"],
           ["Leads nuevos", newLeads, "Cotizaciones entrantes"],
-          ["Chats esperando", waitingChats, "Atencion en linea"]
+          ["Chats esperando", waitingChats, "Atencion en linea"],
+          ["Cotizaciones pendientes", pendingQuotes, "DRAFT / SENT / VIEWED"],
+          ["Ventas aceptadas", `USD ${Number(acceptedQuoteSum._sum.total || 0).toLocaleString("en-US")}`, "Ingresos estimados"],
+          ["Comisiones pendientes", pendingCommissions, "Por aprobar o pagar"],
+          ["Proyectos activos", activeProjects, "Planificacion / ejecucion"],
+          ["Equipos alquiler", rentableProducts, "Disponibles para renta"],
+          ["Tasa cierre", `${conversionRate}%`, "Ganadas vs perdidas"]
         ].map(([title, value, text]) => (
           <Card key={String(title)}>
             <CardHeader>
@@ -98,6 +127,45 @@ export default async function AdminPage() {
             </CardHeader>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-8 grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Embudo comercial</CardTitle>
+            <CardDescription>Lectura rapida de oportunidades y cierre.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {[
+              ["Leads nuevos", newLeads],
+              ["Cotizaciones pendientes", pendingQuotes],
+              ["Cotizaciones ganadas", wonQuotes],
+              ["Cotizaciones perdidas", lostQuotes]
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <div className="mb-1 flex justify-between text-sm"><span>{label}</span><span className="font-semibold">{value}</span></div>
+                <div className="h-2 rounded-full bg-muted">
+                  <div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(Number(value) * 12, 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Lineas de negocio</CardTitle>
+            <CardDescription>Base para reportes: productos, servicios, alquiler y soporte.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {["Servicios topograficos", "Venta de equipos", "Alquiler", "Soporte/calibracion"].map((line) => (
+              <div key={line} className="rounded-md border bg-muted/30 p-4">
+                <p className="text-sm font-semibold">{line}</p>
+                <p className="mt-2 text-xs text-muted-foreground">Reporte preparado para Fase 2.</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="mt-8">
@@ -125,7 +193,10 @@ export default async function AdminPage() {
                     </td>
                     <td className="p-3">{lead.company || "-"}</td>
                     <td className="p-3">{lead.source || "web"}</td>
-                    <td className="p-3"><StatusBadge status={lead.status} /></td>
+                    <td className="p-3">
+                      <StatusBadge status={lead.status} />
+                      <p className="mt-1 text-xs text-muted-foreground">{lead.assignedProfile?.displayName || "Sin vendedor"}</p>
+                    </td>
                   </tr>
                 ))}
               </tbody>

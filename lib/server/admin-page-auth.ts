@@ -13,5 +13,5 @@ export async function requireAdminPage(allowedRoles: Role[]) {
 }
 
 export function canManageAdmin(role?: string | null) {
-  return role === "ADMIN" || role === "EDITOR";
+  return role === "ADMIN" || role === "SUPER_ADMIN" || role === "COMMERCIAL_ADMIN" || role === "EDITOR";
 }

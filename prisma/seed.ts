@@ -26,6 +26,10 @@ async function main() {
       phone: "+51 999 111 222",
       roleTitle: "Asesor de instrumentacion y venta tecnica",
       department: "SALES" as const,
+      commissionType: "SALE_PERCENTAGE" as const,
+      commissionRate: 5,
+      monthlyGoal: 60000,
+      territory: "Lima Metropolitana y cuentas B2B",
       specialties: ["Estaciones totales", "GNSS", "Compra B2B", "Cotizaciones"],
       tools: {
         whatsappTemplate: "Gracias por contactar a ICC Topografia. Para cotizar correctamente necesito confirmar aplicacion, ciudad, plazo y accesorios requeridos.",
@@ -39,6 +43,11 @@ async function main() {
       phone: "+51 999 333 444",
       roleTitle: "Especialista en soporte, calibracion y mantenimiento",
       department: "TECHNICAL_SUPPORT" as const,
+      commissionType: "FIXED_AMOUNT" as const,
+      commissionRate: 0,
+      fixedCommission: 0,
+      monthlyGoal: 0,
+      territory: "Soporte nacional",
       specialties: ["Calibracion", "Mantenimiento", "Soporte tecnico", "Garantias"],
       tools: {
         whatsappTemplate: "Para revisar tu caso tecnico necesito modelo, serie, falla observada y fecha del ultimo mantenimiento.",
@@ -52,6 +61,10 @@ async function main() {
       phone: "+51 999 555 666",
       roleTitle: "Coordinador de servicios topograficos de campo",
       department: "FIELD_ENGINEERING" as const,
+      commissionType: "SALE_PERCENTAGE" as const,
+      commissionRate: 3,
+      monthlyGoal: 45000,
+      territory: "Servicios de campo",
       specialties: ["Levantamiento", "Replanteo", "Georreferenciacion", "Control geometrico"],
       tools: {
         whatsappTemplate: "Para dimensionar el servicio necesito ubicacion, area aproximada, entregables requeridos y fecha objetivo.",
@@ -141,6 +154,90 @@ async function main() {
       }
     });
   }
+
+  const client = await prisma.client.upsert({
+    where: { email: "operaciones@urbania-demo.pe" },
+    update: {},
+    create: {
+      name: "Mariana Torres",
+      company: "Urbania Capital Demo",
+      email: "operaciones@urbania-demo.pe",
+      phone: "+51 988 220 440",
+      status: "cliente activo",
+      contactName: "Mariana Torres"
+    }
+  });
+
+  const seller = await prisma.staffProfile.findUnique({ where: { email: "ventas@icctopografia.pe" } });
+  const lead = await prisma.lead.upsert({
+    where: { id: "seed-lead-urbania" },
+    update: {},
+    create: {
+      id: "seed-lead-urbania",
+      clientId: client.id,
+      assignedProfileId: seller?.id,
+      name: "Mariana Torres",
+      email: "operaciones@urbania-demo.pe",
+      phone: "+51 988 220 440",
+      company: "Urbania Capital Demo",
+      message: "Necesitamos replanteo, control semanal y entregables para avance de obra.",
+      source: "web",
+      interest: "Servicio de control topografico",
+      priority: "HIGH",
+      estimatedValue: 18500,
+      status: "NEGOTIATION"
+    }
+  });
+
+  await prisma.quote.upsert({
+    where: { number: "COT-2026-0001" },
+    update: {},
+    create: {
+      number: "COT-2026-0001",
+      clientId: client.id,
+      leadId: lead.id,
+      sellerProfileId: seller?.id,
+      customerName: client.name,
+      customerEmail: client.email,
+      company: client.company,
+      status: "SENT",
+      subtotal: 18500,
+      total: 18500,
+      terms: "50% al inicio, saldo contra entrega de informe tecnico.",
+      deliveryTime: "Inicio en 72 horas despues de orden de servicio.",
+      items: {
+        create: {
+          type: "service",
+          description: "Control topografico semanal y reportes de avance",
+          quantity: 1,
+          unitPrice: 18500,
+          subtotal: 18500
+        }
+      }
+    }
+  });
+
+  await prisma.project.upsert({
+    where: { slug: "control-topografico-corredor-vial-demo" },
+    update: {},
+    create: {
+      title: "Control topografico para corredor vial demo",
+      slug: "control-topografico-corredor-vial-demo",
+      clientId: client.id,
+      clientName: client.company,
+      location: "Lima, Peru",
+      category: "Infraestructura vial",
+      servicesApplied: ["Control geometrico", "Replanteo", "Reportes QA/QC"],
+      summary: "Red de control, replanteo de ejes y reportes semanales para avance de obra.",
+      description: "Implementacion de puntos de control, verificacion de ejes, niveles y comparativos contra expediente tecnico para reducir retrabajos.",
+      challenge: "Coordinar mediciones con ventanas operativas cortas y mantener trazabilidad entre campo y gabinete.",
+      solution: "Se definio una red de control, protocolo de levantamiento y entregables semanales con evidencia fotografica y cuadros de desviacion.",
+      results: "42 km controlados",
+      status: "PUBLISHED",
+      isPublic: true,
+      isFeatured: true
+    }
+  });
 }
 
 function slugify(value: string) {

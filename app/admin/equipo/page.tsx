@@ -26,8 +26,21 @@ const accessRoles: Array<[Role, string]> = [
   ["TECHNICIAN", "Tecnico"],
   ["SALES", "Vendedor"],
   ["EDITOR", "Editor"],
-  ["ADMIN", "Admin"]
+  ["ADMIN", "Admin"],
+  ["SUPER_ADMIN", "Super admin"],
+  ["COMMERCIAL_ADMIN", "Admin comercial"],
+  ["SURVEYOR", "Topografo"],
+  ["ENGINEER", "Ingeniero"],
+  ["ARCHITECT", "Arquitecto"],
+  ["SUPPORT", "Soporte"]
 ];
+
+const commissionTypes = [
+  ["SALE_PERCENTAGE", "Porcentaje sobre venta"],
+  ["MARGIN_PERCENTAGE", "Porcentaje sobre margen"],
+  ["FIXED_AMOUNT", "Monto fijo"],
+  ["CATEGORY_PERCENTAGE", "Diferenciada por categoria"]
+] as const;
 
 type StaffTools = {
   whatsappTemplate?: string;
@@ -90,6 +103,13 @@ export default async function AdminTeamPage() {
                     phone: profile.phone || "",
                     roleTitle: profile.roleTitle,
                     department: profile.department,
+                    avatar: profile.avatar || "",
+                    commissionType: profile.commissionType,
+                    commissionRate: String(profile.commissionRate),
+                    fixedCommission: String(profile.fixedCommission),
+                    monthlyGoal: String(profile.monthlyGoal),
+                    territory: profile.territory || "",
+                    internalNotes: profile.internalNotes || "",
                     specialties: profile.specialties.join("\n"),
                     whatsappTemplate: tools.whatsappTemplate || "",
                     checklist: tools.checklist?.join("\n") || "",
@@ -169,6 +189,13 @@ function StaffProfileForm({
     phone: string;
     roleTitle: string;
     department: StaffDepartment;
+    avatar: string;
+    commissionType: string;
+    commissionRate: string;
+    fixedCommission: string;
+    monthlyGoal: string;
+    territory: string;
+    internalNotes: string;
     specialties: string;
     whatsappTemplate: string;
     checklist: string;
@@ -182,9 +209,17 @@ function StaffProfileForm({
       <Input name="roleTitle" placeholder="Cargo o perfil comercial" defaultValue={defaults?.roleTitle} required />
       <Input name="email" type="email" placeholder="Correo" defaultValue={defaults?.email} />
       <Input name="phone" placeholder="Telefono / WhatsApp" defaultValue={defaults?.phone} />
+      <Input name="avatar" placeholder="URL de foto/avatar" defaultValue={defaults?.avatar} />
+      <Input name="territory" placeholder="Zona o cartera asignada" defaultValue={defaults?.territory} />
       <select name="department" defaultValue={defaults?.department || "SALES"} className="h-11 rounded-md border bg-background px-3 text-sm">
         {departments.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select>
+      <select name="commissionType" defaultValue={defaults?.commissionType || "SALE_PERCENTAGE"} className="h-11 rounded-md border bg-background px-3 text-sm">
+        {commissionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select>
+      <Input name="commissionRate" type="number" step="0.01" placeholder="% comision" defaultValue={defaults?.commissionRate || "5"} />
+      <Input name="fixedCommission" type="number" step="0.01" placeholder="Comision fija" defaultValue={defaults?.fixedCommission || "0"} />
+      <Input name="monthlyGoal" type="number" step="0.01" placeholder="Meta mensual" defaultValue={defaults?.monthlyGoal || "0"} />
       <label className="flex items-center gap-2 rounded-md border bg-background px-3 text-sm">
         <input type="checkbox" name="active" defaultChecked={defaults?.active ?? true} />
         Activo para asignacion
@@ -193,6 +228,7 @@ function StaffProfileForm({
       <Textarea name="checklist" placeholder="Checklist interno, una accion por linea" defaultValue={defaults?.checklist} />
       <Textarea name="nextSteps" placeholder="Siguientes pasos comerciales, uno por linea" defaultValue={defaults?.nextSteps} />
       <Textarea name="whatsappTemplate" placeholder="Plantilla sugerida de WhatsApp o email" defaultValue={defaults?.whatsappTemplate} />
+      <Textarea name="internalNotes" placeholder="Observaciones internas del perfil" defaultValue={defaults?.internalNotes} />
       <div className="md:col-span-2">
         <Button type="submit">{submitLabel}</Button>
       </div>

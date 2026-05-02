@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma, Role, StaffDepartment } from "@prisma/client";
+import { CommissionType, Prisma, Role, StaffDepartment } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -42,6 +42,18 @@ function staffToolsFromForm(formData: FormData) {
   };
 }
 
+function staffCommercialFieldsFromForm(formData: FormData) {
+  return {
+    avatar: value(formData, "avatar"),
+    commissionType: (value(formData, "commissionType") as CommissionType | undefined) || "SALE_PERCENTAGE",
+    commissionRate: numberValue(formData, "commissionRate", 5),
+    fixedCommission: numberValue(formData, "fixedCommission"),
+    monthlyGoal: numberValue(formData, "monthlyGoal"),
+    territory: value(formData, "territory"),
+    internalNotes: value(formData, "internalNotes")
+  };
+}
+
 async function requireActionRole(allowedRoles: Role[]) {
   const session = await auth();
   const role = session?.user?.role as Role | undefined;
@@ -55,7 +67,44 @@ async function requireActionRole(allowedRoles: Role[]) {
 
 function roleFromForm(formData: FormData) {
   const role = value(formData, "role") as Role | undefined;
-  return role && ["TECHNICIAN", "SALES", "EDITOR", "ADMIN"].includes(role) ? role : "SALES";
+  return role && ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(role) ? role : "SALES";
+}
+
+function numberValue(formData: FormData, key: string, fallback = 0) {
+  const raw = value(formData, key);
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function dateValue(formData: FormData, key: string) {
+  const raw = value(formData, key);
+  return raw ? new Date(raw) : undefined;
+}
+
+function nullableValue(formData: FormData, key: string) {
+  return value(formData, key) || null;
+}
+
+async function upsertClientFromContact(formData: FormData) {
+  const email = value(formData, "customerEmail") || value(formData, "email");
+  const name = value(formData, "customerName") || value(formData, "name") || "Cliente sin nombre";
+  if (!email) return null;
+
+  return prisma.client.upsert({
+    where: { email },
+    update: {
+      name,
+      company: value(formData, "company"),
+      phone: value(formData, "phone")
+    },
+    create: {
+      name,
+      email,
+      company: value(formData, "company"),
+      phone: value(formData, "phone"),
+      contactName: name
+    }
+  });
 }
 
 export async function deleteLeadAction(id: string) {
@@ -65,8 +114,40 @@ export async function deleteLeadAction(id: string) {
 }
 
 export async function updateLeadStatusAction(id: string, formData: FormData) {
-  const status = value(formData, "status") as "NEW" | "CONTACTED" | "QUALIFIED" | "WON" | "LOST";
+  const status = value(formData, "status") as "NEW" | "CONTACTED" | "QUALIFIED" | "EVALUATION" | "QUOTED" | "NEGOTIATION" | "WON" | "LOST" | "REQUIRES_TECH_SUPPORT";
   await prisma.lead.update({ where: { id }, data: { status } });
+  revalidatePath("/admin/leads");
+}
+
+export async function updateLeadPipelineAction(id: string, formData: FormData) {
+  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const assignedProfileId = value(formData, "assignedProfileId");
+  await prisma.lead.update({
+    where: { id },
+    data: {
+      status: value(formData, "status") as "NEW" | "CONTACTED" | "QUALIFIED" | "EVALUATION" | "QUOTED" | "NEGOTIATION" | "WON" | "LOST" | "REQUIRES_TECH_SUPPORT",
+      priority: value(formData, "priority") as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+      assignedProfileId: assignedProfileId || null,
+      interest: value(formData, "interest"),
+      estimatedValue: numberValue(formData, "estimatedValue"),
+      nextFollowUpAt: dateValue(formData, "nextFollowUpAt") || null
+    }
+  });
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin");
+}
+
+export async function createLeadNoteAction(id: string, formData: FormData) {
+  const { session } = await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const body = value(formData, "body");
+  if (!body) return;
+  await prisma.leadNote.create({
+    data: {
+      leadId: id,
+      authorId: session.user.id,
+      body
+    }
+  });
   revalidatePath("/admin/leads");
 }
 
@@ -82,6 +163,97 @@ export async function deleteOrderAction(id: string) {
   await prisma.order.delete({ where: { id } });
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");
+}
+
+export async function createQuoteAction(formData: FormData) {
+  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const client = await upsertClientFromContact(formData);
+  const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
+  const unitPrice = numberValue(formData, "unitPrice");
+  const discount = numberValue(formData, "discount");
+  const subtotal = Math.max(quantity * unitPrice - discount, 0);
+  const tax = numberValue(formData, "tax");
+  const total = subtotal + tax;
+  const now = new Date();
+  const number = `COT-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
+
+  await prisma.quote.create({
+    data: {
+      number,
+      clientId: client?.id,
+      leadId: nullableValue(formData, "leadId"),
+      sellerProfileId: nullableValue(formData, "sellerProfileId"),
+      customerName: value(formData, "customerName") || client?.name || "",
+      customerEmail: value(formData, "customerEmail") || client?.email,
+      company: value(formData, "company") || client?.company,
+      status: "DRAFT",
+      currency: value(formData, "currency") || "USD",
+      subtotal,
+      discount,
+      tax,
+      total,
+      validUntil: dateValue(formData, "validUntil"),
+      terms: value(formData, "terms"),
+      deliveryTime: value(formData, "deliveryTime"),
+      observations: value(formData, "observations"),
+      items: {
+        create: {
+          productId: nullableValue(formData, "productId"),
+          type: value(formData, "itemType") || "product",
+          description: value(formData, "description") || "Item comercial",
+          quantity,
+          unitPrice,
+          discount,
+          subtotal
+        }
+      }
+    }
+  });
+  revalidatePath("/admin/cotizaciones");
+  revalidatePath("/admin");
+}
+
+export async function updateQuoteStatusAction(id: string, formData: FormData) {
+  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const status = value(formData, "status") as "DRAFT" | "SENT" | "VIEWED" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "CONVERTED";
+  const quote = await prisma.quote.update({
+    where: { id },
+    data: { status },
+    include: { sellerProfile: true, commissions: true }
+  });
+
+  if (status === "ACCEPTED" && quote.sellerProfileId && !quote.commissions.length) {
+    const rate = Number(quote.sellerProfile?.commissionRate || 0);
+    const amount = Number(quote.total) * (rate / 100);
+    await prisma.commission.create({
+      data: {
+        quoteId: quote.id,
+        sellerProfileId: quote.sellerProfileId,
+        type: quote.sellerProfile?.commissionType || "SALE_PERCENTAGE",
+        baseAmount: quote.total,
+        rate,
+        amount
+      }
+    });
+  }
+
+  revalidatePath("/admin/cotizaciones");
+  revalidatePath("/admin/ventas");
+  revalidatePath("/admin");
+}
+
+export async function updateCommissionStatusAction(id: string, formData: FormData) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const status = value(formData, "status") as "PENDING" | "APPROVED" | "PAID" | "CANCELLED";
+  await prisma.commission.update({
+    where: { id },
+    data: {
+      status,
+      paidAt: status === "PAID" ? new Date() : null,
+      notes: value(formData, "notes")
+    }
+  });
+  revalidatePath("/admin/ventas");
 }
 
 export async function createFaqAction(formData: FormData) {
@@ -430,6 +602,7 @@ export async function createStaffProfileAction(formData: FormData) {
       phone: value(formData, "phone"),
       roleTitle: value(formData, "roleTitle") || "",
       department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
+      ...staffCommercialFieldsFromForm(formData),
       specialties: listFromTextarea(formData, "specialties"),
       tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
       active: checked(formData, "active")
@@ -449,6 +622,7 @@ export async function updateStaffProfileAction(id: string, formData: FormData) {
       phone: value(formData, "phone"),
       roleTitle: value(formData, "roleTitle") || "",
       department: (value(formData, "department") as StaffDepartment | undefined) || "SALES",
+      ...staffCommercialFieldsFromForm(formData),
       specialties: listFromTextarea(formData, "specialties"),
       tools: staffToolsFromForm(formData) as Prisma.InputJsonValue,
       active: checked(formData, "active")
@@ -456,6 +630,77 @@ export async function updateStaffProfileAction(id: string, formData: FormData) {
   });
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
+}
+
+export async function updateSellerCommercialAction(id: string, formData: FormData) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await prisma.staffProfile.update({
+    where: { id },
+    data: staffCommercialFieldsFromForm(formData)
+  });
+  revalidatePath("/admin/ventas");
+  revalidatePath("/admin/equipo");
+}
+
+export async function createProjectAction(formData: FormData) {
+  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  const title = value(formData, "title") || "";
+  await prisma.project.create({
+    data: {
+      title,
+      slug: value(formData, "slug") || slugify(title),
+      clientName: value(formData, "clientName"),
+      location: value(formData, "location"),
+      category: value(formData, "category"),
+      servicesApplied: listFromTextarea(formData, "servicesApplied"),
+      summary: value(formData, "summary") || "",
+      description: value(formData, "description") || "",
+      challenge: value(formData, "challenge"),
+      solution: value(formData, "solution"),
+      results: value(formData, "results"),
+      status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
+      isPublic: checked(formData, "isPublic"),
+      isFeatured: checked(formData, "isFeatured"),
+      images: {
+        create: listFromTextarea(formData, "images").map((url, position) => ({ url, position, alt: title }))
+      }
+    }
+  });
+  revalidatePath("/admin/proyectos");
+  revalidatePath("/proyectos");
+}
+
+export async function updateProjectAction(id: string, formData: FormData) {
+  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  const title = value(formData, "title") || "";
+  await prisma.project.update({
+    where: { id },
+    data: {
+      title,
+      slug: value(formData, "slug") || slugify(title),
+      clientName: value(formData, "clientName"),
+      location: value(formData, "location"),
+      category: value(formData, "category"),
+      servicesApplied: listFromTextarea(formData, "servicesApplied"),
+      summary: value(formData, "summary") || "",
+      description: value(formData, "description") || "",
+      challenge: value(formData, "challenge"),
+      solution: value(formData, "solution"),
+      results: value(formData, "results"),
+      status: (value(formData, "status") as "PLANNING" | "IN_PROGRESS" | "FINISHED" | "PUBLISHED" | "ARCHIVED") || "PLANNING",
+      isPublic: checked(formData, "isPublic"),
+      isFeatured: checked(formData, "isFeatured")
+    }
+  });
+  revalidatePath("/admin/proyectos");
+  revalidatePath("/proyectos");
+}
+
+export async function deleteProjectAction(id: string) {
+  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  await prisma.project.delete({ where: { id } });
+  revalidatePath("/admin/proyectos");
+  revalidatePath("/proyectos");
 }
 
 export async function deleteStaffProfileAction(id: string) {

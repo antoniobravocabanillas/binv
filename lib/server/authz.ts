@@ -6,8 +6,14 @@ const roleRank: Record<Role, number> = {
   CUSTOMER: 0,
   TECHNICIAN: 1,
   SALES: 1,
+  SURVEYOR: 1,
+  ENGINEER: 1,
+  ARCHITECT: 1,
+  SUPPORT: 1,
   EDITOR: 2,
-  ADMIN: 3
+  COMMERCIAL_ADMIN: 2,
+  ADMIN: 3,
+  SUPER_ADMIN: 4
 };
 
 export async function requireRole(minRole: Role = "ADMIN") {

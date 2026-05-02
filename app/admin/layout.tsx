@@ -5,16 +5,20 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { brand } from "@/lib/brand";
 
 const adminNav = [
-  { label: "Dashboard", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN"] },
-  { label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN"] },
-  { label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN"] },
-  { label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN"] },
-  { label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN"] },
-  { label: "Equipo", href: "/admin/equipo", roles: ["ADMIN"] },
-  { label: "Leads", href: "/admin/leads", roles: ["SALES", "ADMIN"] }
+  { label: "Dashboard", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
+  { label: "Ventas", href: "/admin/ventas", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { label: "Leads", href: "/admin/leads", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { label: "Cotizaciones", href: "/admin/cotizaciones", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { label: "Clientes", href: "/admin/clientes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
+  { label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
+  { label: "Proyectos", href: "/admin/proyectos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"] },
+  { label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
+  { label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
+  { label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] }
 ];
 
-const allowedRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+const allowedRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
