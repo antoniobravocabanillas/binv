@@ -32,7 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {navItems.map((item) => <Link key={item.href} href={item.href} className="block rounded-md px-3 py-2 text-sm text-white/72 hover:bg-white/10 hover:text-white">{item.label}</Link>)}
         </nav>
         <div className="absolute bottom-5 left-5 right-5">
-          <SignOutButton />
+          <SignOutButton className="w-full border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white" />
         </div>
       </aside>
       <main className="lg:pl-64">

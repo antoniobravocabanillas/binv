@@ -55,6 +55,12 @@ export function SiteHeader() {
         </nav>
         <div className="flex items-center gap-2">
           <CartNavButton />
+          <Button asChild variant="outline" className="hidden lg:inline-flex">
+            <Link href="/cuenta">
+              <UserRound className="h-4 w-4" />
+              Cuenta / login
+            </Link>
+          </Button>
           <Button asChild className="hidden sm:inline-flex">
             <Link href="/cotizacion">
               <PhoneCall className="h-4 w-4" />
@@ -68,6 +74,7 @@ export function SiteHeader() {
             aria-label={menuOpen ? "Cerrar menu" : "Abrir menu"}
             aria-expanded={menuOpen}
             aria-controls="site-navigation-menu"
+            className="lg:hidden"
             onClick={() => setMenuOpen((value) => !value)}
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
