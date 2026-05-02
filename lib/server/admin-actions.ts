@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
+import { BotQuestionStatus, CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -525,7 +525,7 @@ export async function deleteCmsPageAction(id: string) {
 }
 
 export async function takeChatConversationAction(id: string) {
-  const { session } = await requireActionRole(["EDITOR", "ADMIN"]);
+  const { session } = await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const profile = session?.user?.id
     ? await prisma.staffProfile.findUnique({ where: { userId: session.user.id } })
     : null;
@@ -541,7 +541,7 @@ export async function takeChatConversationAction(id: string) {
 }
 
 export async function assignChatProfileAction(id: string, formData: FormData) {
-  await requireActionRole(["EDITOR", "ADMIN"]);
+  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const profileId = value(formData, "profileId");
 
   await prisma.chatConversation.update({
@@ -555,8 +555,8 @@ export async function assignChatProfileAction(id: string, formData: FormData) {
 }
 
 export async function closeChatConversationAction(id: string) {
-  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
-  if (role !== "ADMIN" && role !== "EDITOR") {
+  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  if (!["ADMIN", "EDITOR", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role)) {
     const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
     const conversation = await prisma.chatConversation.findUnique({
       where: { id },
@@ -573,7 +573,7 @@ export async function closeChatConversationAction(id: string) {
 }
 
 export async function deleteChatConversationAction(id: string) {
-  await requireActionRole(["EDITOR", "ADMIN"]);
+  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   await prisma.chatConversation.delete({ where: { id } });
   revalidatePath("/admin/chat");
   revalidatePath("/admin");
@@ -582,13 +582,13 @@ export async function deleteChatConversationAction(id: string) {
 export async function sendAdminChatMessageAction(id: string, formData: FormData) {
   const body = value(formData, "body");
   if (!body) return;
-  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+  const { session, role } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
   const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
   const conversation = await prisma.chatConversation.findUnique({
     where: { id },
     select: { assignedProfileId: true, assignedToId: true }
   });
-  const canManageAnyChat = role === "ADMIN" || role === "EDITOR";
+  const canManageAnyChat = ["ADMIN", "EDITOR", "SUPER_ADMIN", "COMMERCIAL_ADMIN"].includes(role);
   const canReply =
     canManageAnyChat ||
     conversation?.assignedToId === session.user.id ||
@@ -800,6 +800,82 @@ export async function sendTicketMessageAction(id: string, formData: FormData) {
   });
   revalidatePath("/admin/tickets");
   revalidatePath("/portal");
+}
+
+export async function createInternalChannelAction(formData: FormData) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const name = value(formData, "name");
+  if (!name) return;
+  await prisma.internalChatChannel.upsert({
+    where: { slug: value(formData, "slug") || slugify(name) },
+    update: {
+      name,
+      description: value(formData, "description")
+    },
+    create: {
+      name,
+      slug: value(formData, "slug") || slugify(name),
+      description: value(formData, "description")
+    }
+  });
+  revalidatePath("/admin/chat-interno");
+}
+
+export async function sendInternalMessageAction(channelId: string, formData: FormData) {
+  const body = value(formData, "body");
+  if (!body) return;
+  const { session } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  await prisma.internalChatMessage.create({
+    data: {
+      channelId,
+      userId: session.user.id,
+      body,
+      files: listFromTextarea(formData, "files"),
+      leadId: nullableValue(formData, "leadId"),
+      projectId: nullableValue(formData, "projectId"),
+      ticketId: nullableValue(formData, "ticketId")
+    }
+  });
+  revalidatePath("/admin/chat-interno");
+}
+
+export async function reviewBotQuestionAction(id: string, formData: FormData) {
+  await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const status = (value(formData, "status") as BotQuestionStatus | undefined) || "PENDING";
+  const question = await prisma.botUnansweredQuestion.update({
+    where: { id },
+    data: {
+      status,
+      answer: value(formData, "answer"),
+      category: value(formData, "category")
+    }
+  });
+
+  if (status === "APPROVED" && question.answer) {
+    await prisma.faq.create({
+      data: {
+        question: question.question,
+        answer: question.answer,
+        category: question.category || "atencion",
+        origin: "chatbot",
+        approved: true,
+        active: true
+      }
+    });
+  }
+
+  revalidatePath("/admin/chatbot");
+  revalidatePath("/admin/contenidos");
+  revalidatePath("/faq");
+}
+
+export async function markNotificationReadAction(id: string) {
+  const { session } = await requireActionRole(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  await prisma.notification.updateMany({
+    where: { id, OR: [{ userId: session.user.id }, { userId: null }] },
+    data: { readAt: new Date() }
+  });
+  revalidatePath("/admin/notificaciones");
 }
 
 export async function deleteStaffProfileAction(id: string) {

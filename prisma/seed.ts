@@ -156,6 +156,22 @@ async function main() {
     await prisma.faq.create({ data: { ...faq, position } });
   }
 
+  const internalChannels = [
+    { name: "General", slug: "general", description: "Coordinacion transversal del equipo ICC." },
+    { name: "Ventas", slug: "ventas", description: "Leads, cotizaciones, seguimiento y cierres." },
+    { name: "Operaciones", slug: "operaciones", description: "Campo, gabinete y proyectos." },
+    { name: "Soporte", slug: "soporte", description: "Tickets, calibracion, reparacion y garantias." },
+    { name: "Proyectos", slug: "proyectos", description: "Avances, entregables y coordinacion tecnica." }
+  ];
+
+  for (const channel of internalChannels) {
+    await prisma.internalChatChannel.upsert({
+      where: { slug: channel.slug },
+      update: channel,
+      create: channel
+    });
+  }
+
   for (const post of posts) {
     await prisma.blogPost.upsert({
       where: { slug: post.slug },
@@ -314,6 +330,27 @@ async function main() {
           }
         ]
       }
+    }
+  });
+
+  await prisma.botUnansweredQuestion.upsert({
+    where: { question: "Que incluye una calibracion de estacion total?" },
+    update: {},
+    create: {
+      question: "Que incluye una calibracion de estacion total?",
+      answer: "Incluye revision funcional, verificacion de precision, diagnostico, ajustes necesarios y recomendaciones de uso.",
+      category: "calibracion",
+      source: "demo",
+      frequency: 3
+    }
+  });
+
+  await prisma.notification.create({
+    data: {
+      type: "SYSTEM",
+      title: "Fase 3 activa",
+      body: "Chat interno, chatbot local, FAQ dinamica, reportes y notificaciones estan disponibles.",
+      href: "/admin/reportes"
     }
   });
 }

@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminChatPage() {
-  const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
+  const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
   const role = session.user.role as Role;
   const canManage = canManageAdmin(role);
   const currentProfile = await prisma.staffProfile.findUnique({

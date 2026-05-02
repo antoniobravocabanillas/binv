@@ -124,6 +124,32 @@ enum TicketStatus {
   CLOSED
 }
 
+enum BotProvider {
+  LOCAL
+  OPENROUTER
+  GEMINI
+  GROQ
+  HUGGINGFACE
+  OLLAMA
+}
+
+enum BotQuestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  LEAD
+  QUOTE
+  TICKET
+  CHAT
+  PROJECT
+  COMMISSION
+  FAQ
+  SYSTEM
+}
+
 enum ChatStatus {
   WAITING
   ACTIVE
@@ -139,24 +165,26 @@ enum StaffDepartment {
 }
 
 model User {
-  id             String             @id @default(cuid())
-  name           String?
-  email          String             @unique
-  emailVerified  DateTime?
-  image          String?
-  passwordHash   String?
-  role           Role               @default(CUSTOMER)
-  accounts       Account[]
-  sessions       Session[]
-  orders         Order[]
-  addresses      Address[]
-  favorites      Favorite[]
-  assignedChats  ChatConversation[]
-  ticketMessages TicketMessage[]
-  staffProfile   StaffProfile?
-  clientProfile  Client?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  id               String                @id @default(cuid())
+  name             String?
+  email            String                @unique
+  emailVerified    DateTime?
+  image            String?
+  passwordHash     String?
+  role             Role                  @default(CUSTOMER)
+  accounts         Account[]
+  sessions         Session[]
+  orders           Order[]
+  addresses        Address[]
+  favorites        Favorite[]
+  assignedChats    ChatConversation[]
+  ticketMessages   TicketMessage[]
+  internalMessages InternalChatMessage[]
+  notifications    Notification[]
+  staffProfile     StaffProfile?
+  clientProfile    Client?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 }
 
 model Client {
@@ -393,15 +421,18 @@ model Testimonial {
 }
 
 model Faq {
-  id        String   @id @default(cuid())
-  question  String
-  answer    String
-  category  String?
-  position  Int      @default(0)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  question   String
+  answer     String
+  category   String?
+  origin     String   @default("manual")
+  approved   Boolean  @default(true)
+  usageCount Int      @default(0)
+  position   Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
-  @@index([active, position])
+  @@index([active, approved, position])
 }
 
 model BlogPost {
@@ -578,6 +609,89 @@ model ChatMessage {
   createdAt      DateTime         @default(now())
 
   @@index([conversationId, createdAt])
+}
+
+model InternalChatChannel {
+  id          String                @id @default(cuid())
+  name        String
+  slug        String                @unique
+  description String?
+  messages    InternalChatMessage[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model InternalChatMessage {
+  id        String              @id @default(cuid())
+  channelId String
+  channel   InternalChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  body      String
+  files     String[]
+  leadId    String?
+  projectId String?
+  ticketId  String?
+  createdAt DateTime            @default(now())
+
+  @@index([channelId, createdAt])
+  @@index([userId])
+}
+
+model BotConversation {
+  id              String       @id @default(cuid())
+  customerName    String?
+  customerEmail   String?
+  status          String       @default("bot")
+  provider        BotProvider  @default(LOCAL)
+  escalatedChatId String?
+  messages        BotMessage[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model BotMessage {
+  id             String          @id @default(cuid())
+  conversationId String
+  conversation   BotConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String
+  body           String
+  source         String?
+  confidence     Decimal?
+  createdAt      DateTime        @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model BotUnansweredQuestion {
+  id        String            @id @default(cuid())
+  question  String            @unique
+  answer    String?
+  category  String?
+  source    String?
+  frequency Int               @default(1)
+  status    BotQuestionStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([status, frequency])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(SYSTEM)
+  title     String
+  body      String?
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@index([type, createdAt])
 }
 
 model StaffProfile {

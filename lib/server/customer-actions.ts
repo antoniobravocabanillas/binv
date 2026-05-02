@@ -84,8 +84,17 @@ export async function createCustomerTicketAction(formData: FormData) {
       }
     }
   });
+  await prisma.notification.create({
+    data: {
+      type: "TICKET",
+      title: "Nuevo ticket de cliente",
+      body: `${client.name} solicito soporte: ${subject}`,
+      href: "/admin/tickets"
+    }
+  });
   revalidatePath("/portal");
   revalidatePath("/admin/tickets");
+  revalidatePath("/admin/notificaciones");
 }
 
 export async function replyCustomerTicketAction(ticketId: string, formData: FormData) {
@@ -142,10 +151,20 @@ export async function respondPublicQuoteAction(token: string, status: QuoteStatu
     });
   }
 
+  await prisma.notification.create({
+    data: {
+      type: "QUOTE",
+      title: status === "ACCEPTED" ? "Cotizacion aceptada" : "Cotizacion rechazada",
+      body: `${quote.customerName} actualizo ${quote.number}`,
+      href: "/admin/cotizaciones"
+    }
+  });
+
   revalidatePath(`/cotizaciones/${token}`);
   revalidatePath("/portal");
   revalidatePath("/admin/cotizaciones");
   revalidatePath("/admin/ventas");
+  revalidatePath("/admin/notificaciones");
 }
 
 export async function respondPublicQuoteFromFormAction(token: string, formData: FormData) {

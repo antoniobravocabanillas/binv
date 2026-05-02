@@ -17,6 +17,10 @@ const adminNav = [
   { label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
   { label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
   { label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
+  { label: "Chat interno", href: "/admin/chat-interno", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
+  { label: "Chatbot", href: "/admin/chatbot", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { label: "Reportes", href: "/admin/reportes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { label: "Notificaciones", href: "/admin/notificaciones", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
   { label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] }
 ];
 

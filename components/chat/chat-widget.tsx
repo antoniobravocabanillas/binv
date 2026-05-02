@@ -33,6 +33,11 @@ type ChatConversation = {
   messages: ChatMessage[];
 };
 
+type BotMessage = {
+  sender: "customer" | "bot";
+  body: string;
+};
+
 const storageKey = "icc-chat-conversation-id";
 
 const topics = [
@@ -52,6 +57,15 @@ export function ChatWidget() {
   const [error, setError] = useState("");
   const [systemNotice, setSystemNotice] = useState("");
   const [messageBody, setMessageBody] = useState("");
+  const [botConversationId, setBotConversationId] = useState("");
+  const [botMessages, setBotMessages] = useState<BotMessage[]>([
+    {
+      sender: "bot",
+      body: "Hola, soy el asistente ICC. Puedo responder preguntas sobre servicios, equipos, alquiler, calibracion o derivarte con un asesor."
+    }
+  ]);
+  const [botInput, setBotInput] = useState("");
+  const [showHumanForm, setShowHumanForm] = useState(false);
   const startFormRef = useRef<HTMLFormElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
@@ -168,6 +182,38 @@ export function ChatWidget() {
     if (refreshed.ok && refreshedResult?.conversation) setConversation(refreshedResult.conversation);
   }
 
+  async function askBot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!botInput.trim() || loading) return;
+    const question = botInput.trim();
+    setBotInput("");
+    setLoading(true);
+    setError("");
+    setBotMessages((messages) => [...messages, { sender: "customer", body: question }]);
+
+    const response = await fetch("/api/chatbot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, conversationId: botConversationId })
+    });
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+
+    if (!response.ok) {
+      setError(result?.error?.message || "No pudimos consultar al asistente.");
+      return;
+    }
+
+    if (result?.conversationId) setBotConversationId(result.conversationId);
+    setBotMessages((messages) => [...messages, { sender: "bot", body: result?.answer || "Puedo derivarte con un asesor." }]);
+
+    if (result?.escalatedChatId) {
+      window.localStorage.setItem(storageKey, result.escalatedChatId);
+      setConversationId(result.escalatedChatId);
+      setSystemNotice("Derivamos tu consulta al equipo ICC. Permanece en linea para que un asesor tome la conversacion.");
+    }
+  }
+
   return (
     <div className="fixed bottom-5 right-5 z-50">
       {open ? (
@@ -211,21 +257,43 @@ export function ChatWidget() {
                 </form>
               </>
             ) : (
-              <form ref={startFormRef} onSubmit={startConversation} className="grid gap-3">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Inicia una conversacion comercial. Te pediremos que permanezcas en linea hasta que un asesor tome el caso.
-                </p>
+              <div className="grid gap-4">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="max-h-56 space-y-3 overflow-auto">
+                    {botMessages.map((message, index) => (
+                      <div key={`${message.sender}-${index}`} className={message.sender === "bot" ? "mr-auto max-w-[88%] rounded-lg bg-white p-3 text-sm shadow-sm" : "ml-auto max-w-[88%] rounded-lg bg-primary p-3 text-sm text-primary-foreground"}>
+                        <p className="whitespace-pre-line leading-5">{message.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={askBot} className="mt-3 flex gap-2">
+                    <Input value={botInput} onChange={(event) => setBotInput(event.target.value)} placeholder="Pregunta al asistente ICC" />
+                    <Button type="submit" size="icon" disabled={loading || !botInput.trim()} aria-label="Preguntar al asistente">
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </form>
+                </div>
                 {systemNotice ? <p className="rounded-md bg-primary/10 p-3 text-xs leading-5 text-primary">{systemNotice}</p> : null}
-                <Input required name="name" placeholder="Nombre y apellido" autoComplete="name" />
-                <Input name="email" type="email" placeholder="Correo corporativo" autoComplete="email" />
-                <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
-                <select name="topic" defaultValue="Cotizacion de equipos" className="h-11 rounded-md border bg-background px-3 text-sm">
-                  {topics.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
-                </select>
-                <Textarea required name="body" placeholder="Cuentanos que equipo, servicio o soporte necesitas" onKeyDown={submitOnEnter} />
-                <Button type="submit" disabled={loading}>{loading ? "Iniciando..." : "Iniciar chat"}</Button>
+                <Button type="button" variant="outline" onClick={() => setShowHumanForm((value) => !value)}>
+                  {showHumanForm ? "Ocultar formulario humano" : "Hablar con asesor humano"}
+                </Button>
+                {showHumanForm ? (
+                  <form ref={startFormRef} onSubmit={startConversation} className="grid gap-3 rounded-lg border p-3">
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      Inicia una conversacion comercial. Te pediremos que permanezcas en linea hasta que un asesor tome el caso.
+                    </p>
+                    <Input required name="name" placeholder="Nombre y apellido" autoComplete="name" />
+                    <Input name="email" type="email" placeholder="Correo corporativo" autoComplete="email" />
+                    <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />
+                    <select name="topic" defaultValue="Cotizacion de equipos" className="h-11 rounded-md border bg-background px-3 text-sm">
+                      {topics.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
+                    </select>
+                    <Textarea required name="body" placeholder="Cuentanos que equipo, servicio o soporte necesitas" onKeyDown={submitOnEnter} />
+                    <Button type="submit" disabled={loading}>{loading ? "Iniciando..." : "Iniciar chat"}</Button>
+                  </form>
+                ) : null}
                 {error ? <p className="text-xs font-medium text-destructive">{error}</p> : null}
-              </form>
+              </div>
             )}
           </div>
         </section>

@@ -45,6 +45,14 @@ export async function POST(request: Request) {
         messages: { orderBy: { createdAt: "asc" } }
       }
     });
+    await prisma.notification.create({
+      data: {
+        type: "CHAT",
+        title: "Nuevo chat web",
+        body: `${customerName}${topic ? ` - ${topic}` : ""}`,
+        href: "/admin/chat"
+      }
+    });
 
     return NextResponse.json({ conversationId: conversation.id, conversation }, { status: 201 });
   } catch (error) {
