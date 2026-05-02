@@ -50,6 +50,7 @@ export function ChatWidget() {
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [systemNotice, setSystemNotice] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const startFormRef = useRef<HTMLFormElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -69,13 +70,33 @@ export function ChatWidget() {
     if (stored) setConversationId(stored);
   }, []);
 
+  function resetConversation(notice?: string) {
+    window.localStorage.removeItem(storageKey);
+    setConversationId("");
+    setConversation(null);
+    setMessageBody("");
+    if (notice) setSystemNotice(notice);
+  }
+
   useEffect(() => {
     if (!conversationId) return;
 
     async function loadConversation() {
       const response = await fetch(`/api/chat?conversationId=${conversationId}`, { cache: "no-store" });
       const result = await response.json().catch(() => null);
-      if (response.ok && result?.conversation) setConversation(result.conversation);
+      if (response.ok && result?.conversation) {
+        if (result.conversation.status === "CLOSED") {
+          resetConversation("La conversacion anterior fue cerrada por el equipo ICC. Puedes iniciar un nuevo chat cuando quieras.");
+          return;
+        }
+
+        setConversation(result.conversation);
+        return;
+      }
+
+      if (response.status === 404) {
+        resetConversation("No encontramos la conversacion anterior. Puedes iniciar un nuevo chat.");
+      }
     }
 
     loadConversation();
@@ -100,6 +121,7 @@ export function ChatWidget() {
 
     setLoading(true);
     setError("");
+    setSystemNotice("");
     const formData = new FormData(event.currentTarget);
     const response = await fetch("/api/chat", { method: "POST", body: formData });
     const result = await response.json().catch(() => null);
@@ -123,6 +145,7 @@ export function ChatWidget() {
 
     setLoading(true);
     setError("");
+    setSystemNotice("");
     const formData = new FormData();
     formData.set("conversationId", conversationId);
     formData.set("body", messageBody.trim());
@@ -131,7 +154,11 @@ export function ChatWidget() {
     setLoading(false);
 
     if (!response.ok) {
-      setError(result?.error?.message || "No pudimos enviar el mensaje.");
+      if (response.status === 409) {
+        resetConversation(result?.error?.message || "La conversacion fue cerrada. Inicia un nuevo chat.");
+      } else {
+        setError(result?.error?.message || "No pudimos enviar el mensaje.");
+      }
       return;
     }
 
@@ -188,6 +215,7 @@ export function ChatWidget() {
                 <p className="text-sm leading-6 text-muted-foreground">
                   Inicia una conversacion comercial. Te pediremos que permanezcas en linea hasta que un asesor tome el caso.
                 </p>
+                {systemNotice ? <p className="rounded-md bg-primary/10 p-3 text-xs leading-5 text-primary">{systemNotice}</p> : null}
                 <Input required name="name" placeholder="Nombre y apellido" autoComplete="name" />
                 <Input name="email" type="email" placeholder="Correo corporativo" autoComplete="email" />
                 <Input name="phone" placeholder="Telefono / WhatsApp" autoComplete="tel" />

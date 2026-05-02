@@ -11,6 +11,13 @@ export async function POST(request: Request) {
     if (!body) return fail("Mensaje requerido", 422);
 
     if (conversationId) {
+      const conversation = await prisma.chatConversation.findUnique({
+        where: { id: conversationId },
+        select: { status: true }
+      });
+      if (!conversation) return fail("Conversacion no encontrada", 404);
+      if (conversation.status === "CLOSED") return fail("La conversacion fue cerrada. Inicia un nuevo chat.", 409);
+
       const message = await prisma.chatMessage.create({
         data: { conversationId, sender: "customer", body }
       });
