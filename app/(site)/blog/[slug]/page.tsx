@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ConversionBand } from "@/components/conversion-band";
 import { Badge } from "@/components/ui/badge";
+import { createBlogPreview, getBlogArticleParagraphs } from "@/lib/blog-content";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
@@ -20,20 +21,17 @@ export default async function BlogPostPage({ params }: BlogPostProps) {
   const { slug } = await params;
   const post = await prisma.blogPost.findUnique({ where: { slug } });
   if (!post || !post.publishedAt) notFound();
-  const content = post.content as { body?: string; blocks?: { text?: string }[] };
+  const articleParagraphs = getBlogArticleParagraphs(post.excerpt, post.content);
+  const summary = createBlogPreview(post.excerpt, post.content, 260);
 
   return (
     <>
       <article className="container max-w-3xl py-16">
         <Badge variant="outline">{post.category || "Recurso tecnico"}</Badge>
         <h1 className="mt-4 text-4xl font-bold leading-tight md:text-5xl">{post.title}</h1>
-        <p className="mt-5 text-lg leading-8 text-muted-foreground">{post.excerpt}</p>
+        <p className="mt-5 text-lg leading-8 text-muted-foreground">{summary}</p>
         <div className="prose prose-slate mt-10 max-w-none">
-          {content.body ? (
-            content.body.split("\n").filter(Boolean).map((paragraph) => <p key={paragraph}>{paragraph}</p>)
-          ) : (
-            content.blocks?.map((block, index) => <p key={index}>{block.text}</p>)
-          )}
+          {articleParagraphs.map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>)}
         </div>
       </article>
       <ConversionBand />

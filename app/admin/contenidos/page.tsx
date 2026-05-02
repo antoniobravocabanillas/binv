@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { CheckCircle2 } from "lucide-react";
+import { FormSubmitButton } from "@/components/admin/form-submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,8 +27,24 @@ import {
   updateTestimonialAction
 } from "@/lib/server/admin-actions";
 
-export default async function AdminContentPage() {
+type AdminContentPageProps = {
+  searchParams?: Promise<{
+    blogStatus?: string;
+    item?: string;
+  }>;
+};
+
+const blogStatusMessages: Record<string, string> = {
+  created: "Post creado y publicado correctamente.",
+  updated: "Cambios del blog guardados correctamente.",
+  deleted: "Post eliminado correctamente."
+};
+
+export default async function AdminContentPage({ searchParams }: AdminContentPageProps) {
   await requireAdminPage(["EDITOR", "ADMIN"]);
+  const resolvedSearchParams = await searchParams;
+  const blogStatus = resolvedSearchParams?.blogStatus;
+  const blogStatusMessage = blogStatus ? blogStatusMessages[blogStatus] : null;
   const [services, posts, faqs, testimonials, banners, pages] = await Promise.all([
     prisma.service.findMany({ orderBy: { updatedAt: "desc" } }),
     prisma.blogPost.findMany({ orderBy: { updatedAt: "desc" } }),
@@ -43,6 +60,16 @@ export default async function AdminContentPage() {
         <h1 className="font-display text-3xl font-bold">Contenidos CMS</h1>
         <p className="mt-2 text-muted-foreground">Gestiona lo que publica el front: servicios, blog, FAQ, testimonios, banners y paginas.</p>
       </div>
+
+      {blogStatusMessage ? (
+        <div className="flex items-start gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-semibold">{blogStatusMessage}</p>
+            {resolvedSearchParams?.item ? <p className="mt-1 text-emerald-800">{resolvedSearchParams.item}</p> : null}
+          </div>
+        </div>
+      ) : null}
 
       <CmsBlock title="Servicios" description="Aparecen en /servicios, fichas individuales y home." createAction={createServiceAction} fields={["title", "slug", "summary", "content"]}>
         {services.map((service) => (
@@ -137,7 +164,7 @@ function CmsBlock({ title, description, createAction, fields, children }: { titl
             ? <Textarea key={field} name={field} placeholder={field} />
             : <Input key={field} name={field} placeholder={field} />)}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name={title === "FAQ" || title === "Testimonios" || title === "Banners" ? "active" : "isPublished"} defaultChecked /> Publicar / activar</label>
-          <Button type="submit">Crear</Button>
+          <FormSubmitButton idleLabel="Crear" pendingLabel="Creando..." />
         </form>
         <div className="space-y-4">{children}</div>
       </CardContent>
@@ -152,8 +179,8 @@ function EditableRow({ title, subtitle, updateAction, deleteAction, children }: 
         <h3 className="font-semibold">{title}</h3>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
-      <form action={updateAction} className="grid gap-3 md:grid-cols-2">{children}<Button type="submit">Guardar cambios</Button></form>
-      <form action={deleteAction} className="mt-3"><Button type="submit" variant="destructive">Eliminar</Button></form>
+      <form action={updateAction} className="grid gap-3 md:grid-cols-2">{children}<FormSubmitButton idleLabel="Guardar cambios" pendingLabel="Guardando..." /></form>
+      <form action={deleteAction} className="mt-3"><FormSubmitButton idleLabel="Eliminar" pendingLabel="Eliminando..." variant="destructive" /></form>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { Prisma, Role, StaffDepartment } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -120,10 +121,11 @@ export async function deleteFaqAction(id: string) {
 
 export async function createPostAction(formData: FormData) {
   const title = value(formData, "title") || "";
+  const slug = value(formData, "slug") || slugify(title);
   await prisma.blogPost.create({
     data: {
       title,
-      slug: value(formData, "slug") || slugify(title),
+      slug,
       excerpt: value(formData, "excerpt") || "",
       content: contentFromText(formData) as Prisma.InputJsonValue,
       author: value(formData, "author"),
@@ -135,15 +137,22 @@ export async function createPostAction(formData: FormData) {
   });
   revalidatePath("/admin/contenidos");
   revalidatePath("/blog");
+  revalidatePath(`/blog/${slug}`);
+  redirect(`/admin/contenidos?blogStatus=created&item=${encodeURIComponent(title)}`);
 }
 
 export async function updatePostAction(id: string, formData: FormData) {
   const title = value(formData, "title") || "";
+  const slug = value(formData, "slug") || slugify(title);
+  const previousPost = await prisma.blogPost.findUnique({
+    where: { id },
+    select: { slug: true }
+  });
   await prisma.blogPost.update({
     where: { id },
     data: {
       title,
-      slug: value(formData, "slug") || slugify(title),
+      slug,
       excerpt: value(formData, "excerpt") || "",
       content: contentFromText(formData) as Prisma.InputJsonValue,
       author: value(formData, "author"),
@@ -155,12 +164,25 @@ export async function updatePostAction(id: string, formData: FormData) {
   });
   revalidatePath("/admin/contenidos");
   revalidatePath("/blog");
+  revalidatePath(`/blog/${slug}`);
+  if (previousPost?.slug && previousPost.slug !== slug) {
+    revalidatePath(`/blog/${previousPost.slug}`);
+  }
+  redirect(`/admin/contenidos?blogStatus=updated&item=${encodeURIComponent(title)}`);
 }
 
 export async function deletePostAction(id: string) {
+  const post = await prisma.blogPost.findUnique({
+    where: { id },
+    select: { title: true, slug: true }
+  });
   await prisma.blogPost.delete({ where: { id } });
   revalidatePath("/admin/contenidos");
   revalidatePath("/blog");
+  if (post?.slug) {
+    revalidatePath(`/blog/${post.slug}`);
+  }
+  redirect(`/admin/contenidos?blogStatus=deleted&item=${encodeURIComponent(post?.title || "Post eliminado")}`);
 }
 
 export async function createServiceAction(formData: FormData) {

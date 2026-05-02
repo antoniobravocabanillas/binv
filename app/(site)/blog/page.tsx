@@ -4,6 +4,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { TechnicalPageHero } from "@/components/technical-page-hero";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { createBlogPreview } from "@/lib/blog-content";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo";
 
@@ -22,6 +23,7 @@ export default async function BlogPage() {
     orderBy: { publishedAt: "desc" }
   });
   const [featured, ...rest] = posts;
+  const featuredPreview = featured ? createBlogPreview(featured.excerpt, featured.content, 280) : "";
 
   return (
     <>
@@ -52,7 +54,7 @@ export default async function BlogPage() {
               <div className="flex flex-col justify-center">
                 <Badge variant="outline" className="w-fit">{featured.category || "Recurso tecnico"}</Badge>
                 <h2 className="mt-5 font-display text-3xl font-bold leading-tight group-hover:text-primary md:text-4xl">{featured.title}</h2>
-                <p className="mt-4 leading-8 text-muted-foreground">{featured.excerpt}</p>
+                <p className="mt-4 leading-8 text-muted-foreground">{featuredPreview}</p>
                 <span className="mt-6 inline-flex items-center gap-2 font-semibold text-primary">Leer recurso <ArrowRight className="h-4 w-4" /></span>
               </div>
             </Link>
@@ -70,7 +72,7 @@ export default async function BlogPage() {
                       {index % 2 === 0 ? <SearchCheck className="h-5 w-5 text-primary" /> : <FileText className="h-5 w-5 text-primary" />}
                     </div>
                     <CardTitle>{post.title}</CardTitle>
-                    <CardDescription>{post.excerpt}</CardDescription>
+                    <CardDescription>{createBlogPreview(post.excerpt, post.content, 160)}</CardDescription>
                   </CardHeader>
                 </Card>
               </Link>
