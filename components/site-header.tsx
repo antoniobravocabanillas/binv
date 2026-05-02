@@ -36,6 +36,13 @@ export function SiteHeader() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/94 backdrop-blur">
       <div className="container flex h-16 items-center justify-between gap-4">
@@ -76,7 +83,10 @@ export function SiteHeader() {
             aria-expanded={menuOpen}
             aria-controls="site-navigation-menu"
             className="lg:hidden"
-            onClick={() => setMenuOpen((value) => !value)}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              setMenuOpen((value) => !value);
+            }}
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
@@ -84,12 +94,11 @@ export function SiteHeader() {
       </div>
 
       {menuOpen ? (
-        <div className="fixed inset-x-0 bottom-0 top-16 z-40 overflow-y-auto border-t bg-background shadow-2xl lg:hidden" onClick={() => setMenuOpen(false)}>
+        <div className="fixed inset-x-0 bottom-0 top-16 z-[60] overflow-y-auto border-t bg-background shadow-2xl lg:hidden">
           <nav
             id="site-navigation-menu"
             aria-label="Menu principal"
             className="min-h-full bg-background"
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="border-b bg-[#03111D] px-6 py-5 text-white">
               <p className="text-sm font-semibold uppercase text-[#7DE4FF]">ICC Topografia</p>
@@ -100,6 +109,7 @@ export function SiteHeader() {
                 <Link
                   key={href}
                   href={href}
+                  onClick={() => setMenuOpen(false)}
                   className="border-b px-2 py-4 text-base font-semibold text-muted-foreground transition last:border-b-0 hover:text-foreground"
                 >
                   {label}
@@ -108,19 +118,19 @@ export function SiteHeader() {
             </div>
             <div className="grid gap-2 border-t p-4 sm:grid-cols-3">
               <Button asChild>
-                <Link href="/cuenta">
+                <Link href="/cuenta" onClick={() => setMenuOpen(false)}>
                   <UserRound className="h-4 w-4" />
                   Cuenta / login
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/admin">
+                <Link href="/admin" onClick={() => setMenuOpen(false)}>
                   <LayoutDashboard className="h-4 w-4" />
                   Panel admin
                 </Link>
               </Button>
               <Button asChild variant="secondary">
-                <Link href="/cotizacion">
+                <Link href="/cotizacion" onClick={() => setMenuOpen(false)}>
                   <PhoneCall className="h-4 w-4" />
                   Solicitar cotizacion
                 </Link>
