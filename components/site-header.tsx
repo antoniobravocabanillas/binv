@@ -55,12 +55,13 @@ export function SiteHeader() {
         </nav>
         <div className="flex items-center gap-2">
           <CartNavButton />
-          <Button asChild variant="outline" className="hidden lg:inline-flex">
-            <Link href="/cuenta">
-              <UserRound className="h-4 w-4" />
-              Cuenta / login
-            </Link>
-          </Button>
+          <Link
+            href="/cuenta"
+            className="hidden items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted/70 hover:text-foreground lg:inline-flex"
+          >
+            <UserRound className="h-4 w-4" />
+            Acceso
+          </Link>
           <Button asChild className="hidden sm:inline-flex">
             <Link href="/cotizacion">
               <PhoneCall className="h-4 w-4" />
@@ -83,29 +84,29 @@ export function SiteHeader() {
       </div>
 
       {menuOpen ? (
-        <div className="fixed inset-0 top-16 z-40 bg-slate-950/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
+        <div className="fixed inset-x-0 bottom-0 top-16 z-40 overflow-y-auto border-t bg-background shadow-2xl lg:hidden" onClick={() => setMenuOpen(false)}>
           <nav
             id="site-navigation-menu"
             aria-label="Menu principal"
-            className="ml-auto mr-4 mt-3 w-[calc(100vw-2rem)] max-w-[420px] overflow-hidden rounded-lg border bg-background shadow-2xl"
+            className="min-h-full bg-background"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="border-b bg-[#03111D] px-5 py-4 text-white">
+            <div className="border-b bg-[#03111D] px-6 py-5 text-white">
               <p className="text-sm font-semibold uppercase text-[#7DE4FF]">ICC Topografia</p>
               <p className="mt-1 text-sm text-white/70">Accesos comerciales, cuenta y panel operativo.</p>
             </div>
-            <div className="grid p-3">
+            <div className="grid p-4">
               {navItems.map(([label, href]) => (
                 <Link
                   key={href}
                   href={href}
-                  className="rounded-md px-4 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  className="border-b px-2 py-4 text-base font-semibold text-muted-foreground transition last:border-b-0 hover:text-foreground"
                 >
                   {label}
                 </Link>
               ))}
             </div>
-            <div className="grid gap-2 border-t p-4">
+            <div className="grid gap-2 border-t p-4 sm:grid-cols-3">
               <Button asChild>
                 <Link href="/cuenta">
                   <UserRound className="h-4 w-4" />
