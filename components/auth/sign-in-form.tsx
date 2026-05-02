@@ -34,7 +34,7 @@ export function SignInForm() {
   }
 
   return (
-    <form action={submit} className="relative overflow-hidden rounded-lg border bg-card p-6 shadow-2xl md:p-8">
+    <form action={submit} className="relative overflow-hidden rounded-lg border bg-card p-6 text-foreground shadow-2xl md:p-8">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-[#24C8EE] to-primary" />
       <div className="mb-6 flex items-start gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -50,11 +50,11 @@ export function SignInForm() {
       <div className="grid gap-4">
       <div>
         <label className="text-sm font-semibold" htmlFor="email">Correo</label>
-        <Input id="email" name="email" type="email" autoComplete="email" required placeholder="admin@icctopografia.pe" className="mt-2 bg-muted/40" />
+        <Input id="email" name="email" type="email" autoComplete="email" required placeholder="admin@icctopografia.pe" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <div>
         <label className="text-sm font-semibold" htmlFor="password">Contrasena</label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required placeholder="********" className="mt-2 bg-muted/40" />
+        <Input id="password" name="password" type="password" autoComplete="current-password" required placeholder="********" className="mt-2 bg-muted/40 text-foreground" />
       </div>
       <Button type="submit" size="lg" disabled={isPending} className="mt-2 w-full">
         {isPending ? "Validando acceso..." : "Ingresar al panel"}
