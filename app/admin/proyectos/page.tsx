@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
-import { createProjectAction, deleteProjectAction, updateProjectAction } from "@/lib/server/admin-actions";
+import { createProjectAction, createProjectProgressAction, deleteProjectAction, updateProjectAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const projectStatuses = ["PLANNING", "IN_PROGRESS", "FINISHED", "PUBLISHED", "ARCHIVED"];
@@ -17,7 +17,10 @@ export const revalidate = 0;
 export default async function AdminProjectsPage() {
   await requireAdminPage(["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"]);
   const projects = await prisma.project.findMany({
-    include: { images: { orderBy: { position: "asc" } } },
+    include: {
+      images: { orderBy: { position: "asc" } },
+      progress: { include: { staffProfile: true }, orderBy: { createdAt: "desc" }, take: 5 }
+    },
     orderBy: { updatedAt: "desc" },
     take: 100
   });
@@ -83,6 +86,26 @@ export default async function AdminProjectsPage() {
               <form action={deleteProjectAction.bind(null, project.id)}>
                 <Button type="submit" variant="destructive">Eliminar proyecto</Button>
               </form>
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <p className="font-semibold">Avances tecnicos</p>
+                <div className="mt-3 grid gap-2">
+                  {project.progress.map((entry) => (
+                    <div key={entry.id} className="rounded-md bg-background p-3 text-sm">
+                      <p className="font-semibold">{entry.title}</p>
+                      <p className="mt-1 text-muted-foreground">{entry.body}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{entry.staffProfile?.displayName || "Equipo ICC"} | {entry.milestone || "Avance"}</p>
+                    </div>
+                  ))}
+                  {!project.progress.length ? <p className="text-sm text-muted-foreground">Sin avances registrados.</p> : null}
+                </div>
+                <form action={createProjectProgressAction.bind(null, project.id)} className="mt-4 grid gap-3 md:grid-cols-2">
+                  <Input name="title" placeholder="Titulo del avance" required />
+                  <Input name="milestone" placeholder="Hito / etapa" />
+                  <Textarea name="body" placeholder="Detalle tecnico del avance" required />
+                  <Textarea name="files" placeholder="URLs de entregables o fotos, una por linea" />
+                  <Button type="submit" className="md:col-span-2">Registrar avance</Button>
+                </form>
+              </div>
             </CardContent>
           </Card>
         ))}

@@ -65,8 +65,8 @@ export default async function AccountPage() {
                 </div>
                 <div className="grid gap-3">
                   <Button asChild size="lg">
-                    <Link href="/admin">
-                      Ir al panel
+                    <Link href={session.user.role === "CUSTOMER" ? "/portal" : "/admin"}>
+                      {session.user.role === "CUSTOMER" ? "Ir al portal" : "Ir al panel"}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>

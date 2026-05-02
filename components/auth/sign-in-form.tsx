@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/admin";
+  const explicitCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl = explicitCallbackUrl || "/admin";
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -28,7 +29,9 @@ export function SignInForm() {
         return;
       }
 
-      router.push(callbackUrl);
+      const session = await fetch("/api/auth/session").then((res) => res.json()).catch(() => null);
+      const role = session?.user?.role;
+      router.push(!explicitCallbackUrl && role === "CUSTOMER" ? "/portal" : callbackUrl);
       router.refresh();
     });
   }

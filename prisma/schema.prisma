@@ -91,6 +91,39 @@ enum ProjectRole {
   MANAGER
 }
 
+enum TechnicalAvailability {
+  AVAILABLE
+  FIELD
+  BUSY
+  OFFLINE
+}
+
+enum TicketCategory {
+  EQUIPMENT
+  SERVICE
+  CALIBRATION
+  REPAIR
+  WARRANTY
+  TECHNICAL_QUERY
+  OTHER
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  REVIEWING
+  WAITING_CUSTOMER
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
 enum ChatStatus {
   WAITING
   ACTIVE
@@ -106,42 +139,45 @@ enum StaffDepartment {
 }
 
 model User {
-  id            String             @id @default(cuid())
-  name          String?
-  email         String             @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  role          Role               @default(CUSTOMER)
-  accounts      Account[]
-  sessions      Session[]
-  orders        Order[]
-  addresses     Address[]
-  favorites     Favorite[]
-  assignedChats ChatConversation[]
-  staffProfile  StaffProfile?
-  clientProfile Client?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id             String             @id @default(cuid())
+  name           String?
+  email          String             @unique
+  emailVerified  DateTime?
+  image          String?
+  passwordHash   String?
+  role           Role               @default(CUSTOMER)
+  accounts       Account[]
+  sessions       Session[]
+  orders         Order[]
+  addresses      Address[]
+  favorites      Favorite[]
+  assignedChats  ChatConversation[]
+  ticketMessages TicketMessage[]
+  staffProfile   StaffProfile?
+  clientProfile  Client?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 }
 
 model Client {
-  id          String    @id @default(cuid())
-  userId      String?   @unique
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id          String           @id @default(cuid())
+  userId      String?          @unique
+  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   name        String
   company     String?
   document    String?
-  email       String    @unique
+  email       String           @unique
   phone       String?
   address     String?
   contactName String?
-  status      String    @default("prospecto")
+  status      String           @default("prospecto")
   leads       Lead[]
   quotes      Quote[]
   projects    Project[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  tickets     Ticket[]
+  documents   ClientDocument[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@index([email])
   @@index([status])
@@ -434,6 +470,7 @@ model Quote {
   lead            Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
   sellerProfileId String?
   sellerProfile   StaffProfile? @relation("QuoteSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
+  publicToken     String?       @unique @default(cuid())
   customerName    String
   customerEmail   String?
   company         String?
@@ -447,6 +484,9 @@ model Quote {
   terms           String?
   deliveryTime    String?
   observations    String?
+  viewedAt        DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
   items           QuoteItem[]
   commissions     Commission[]
   createdAt       DateTime      @default(now())
@@ -541,41 +581,48 @@ model ChatMessage {
 }
 
 model StaffProfile {
-  id              String             @id @default(cuid())
-  userId          String?            @unique
-  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id              String                @id @default(cuid())
+  userId          String?               @unique
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   displayName     String
-  email           String?            @unique
+  email           String?               @unique
   phone           String?
   roleTitle       String
-  department      StaffDepartment    @default(SALES)
+  department      StaffDepartment       @default(SALES)
   avatar          String?
-  commissionType  CommissionType     @default(SALE_PERCENTAGE)
-  commissionRate  Decimal            @default(5)
-  fixedCommission Decimal            @default(0)
-  monthlyGoal     Decimal            @default(0)
+  availability    TechnicalAvailability @default(AVAILABLE)
+  workZone        String?
+  experience      String?
+  certifications  String[]
+  documents       String[]
+  commissionType  CommissionType        @default(SALE_PERCENTAGE)
+  commissionRate  Decimal               @default(5)
+  fixedCommission Decimal               @default(0)
+  monthlyGoal     Decimal               @default(0)
   territory       String?
   internalNotes   String?
   specialties     String[]
   tools           Json
-  active          Boolean            @default(true)
+  active          Boolean               @default(true)
   assignedChats   ChatConversation[]
-  assignedLeads   Lead[]             @relation("LeadAssignedProfile")
-  quotes          Quote[]            @relation("QuoteSellerProfile")
-  commissions     Commission[]       @relation("CommissionSellerProfile")
+  assignedLeads   Lead[]                @relation("LeadAssignedProfile")
+  quotes          Quote[]               @relation("QuoteSellerProfile")
+  commissions     Commission[]          @relation("CommissionSellerProfile")
   projectMembers  ProjectMember[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  ticketAssignee  Ticket[]              @relation("TicketAssigneeProfile")
+  progressEntries ProjectProgress[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   @@index([department, active])
 }
 
 model Project {
-  id              String          @id @default(cuid())
+  id              String            @id @default(cuid())
   title           String
-  slug            String          @unique
+  slug            String            @unique
   clientId        String?
-  client          Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client          Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   clientName      String?
   location        String?
   category        String?
@@ -585,13 +632,14 @@ model Project {
   challenge       String?
   solution        String?
   results         String?
-  status          ProjectStatus   @default(PLANNING)
-  isPublic        Boolean         @default(false)
-  isFeatured      Boolean         @default(false)
+  status          ProjectStatus     @default(PLANNING)
+  isPublic        Boolean           @default(false)
+  isFeatured      Boolean           @default(false)
   images          ProjectImage[]
   members         ProjectMember[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  progress        ProjectProgress[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([status, isPublic])
   @@index([isFeatured])
@@ -621,4 +669,74 @@ model ProjectMember {
 
   @@unique([projectId, staffProfileId, role])
   @@index([staffProfileId])
+}
+
+model ProjectProgress {
+  id             String        @id @default(cuid())
+  projectId      String
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  staffProfileId String?
+  staffProfile   StaffProfile? @relation(fields: [staffProfileId], references: [id], onDelete: SetNull)
+  title          String
+  body           String
+  milestone      String?
+  files          String[]
+  createdAt      DateTime      @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([staffProfileId])
+}
+
+model Ticket {
+  id                String          @id @default(cuid())
+  code              String          @unique
+  clientId          String?
+  client            Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  assignedProfileId String?
+  assignedProfile   StaffProfile?   @relation("TicketAssigneeProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  customerName      String
+  customerEmail     String
+  company           String?
+  subject           String
+  category          TicketCategory  @default(TECHNICAL_QUERY)
+  priority          TicketPriority  @default(MEDIUM)
+  status            TicketStatus    @default(OPEN)
+  description       String
+  attachments       String[]
+  messages          TicketMessage[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  closedAt          DateTime?
+
+  @@index([status, createdAt])
+  @@index([clientId])
+  @@index([assignedProfileId])
+  @@index([customerEmail])
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  sender    String
+  body      String
+  files     String[]
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@index([authorId])
+}
+
+model ClientDocument {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title     String
+  url       String
+  type      String?
+  createdAt DateTime @default(now())
+
+  @@index([clientId, createdAt])
 }

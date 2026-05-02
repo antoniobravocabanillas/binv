@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { CommissionType, Prisma, Role, StaffDepartment } from "@prisma/client";
+import { CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -54,6 +54,16 @@ function staffCommercialFieldsFromForm(formData: FormData) {
   };
 }
 
+function staffTechnicalFieldsFromForm(formData: FormData) {
+  return {
+    availability: (value(formData, "availability") as TechnicalAvailability | undefined) || "AVAILABLE",
+    workZone: value(formData, "workZone"),
+    experience: value(formData, "experience"),
+    certifications: listFromTextarea(formData, "certifications"),
+    documents: listFromTextarea(formData, "documents")
+  };
+}
+
 async function requireActionRole(allowedRoles: Role[]) {
   const session = await auth();
   const role = session?.user?.role as Role | undefined;
@@ -83,6 +93,10 @@ function dateValue(formData: FormData, key: string) {
 
 function nullableValue(formData: FormData, key: string) {
   return value(formData, key) || null;
+}
+
+function ticketClosedAt(status?: string) {
+  return status === "CLOSED" || status === "RESOLVED" ? new Date() : null;
 }
 
 async function upsertClientFromContact(formData: FormData) {
@@ -218,7 +232,12 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
   const status = value(formData, "status") as "DRAFT" | "SENT" | "VIEWED" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "CONVERTED";
   const quote = await prisma.quote.update({
     where: { id },
-    data: { status },
+    data: {
+      status,
+      viewedAt: status === "VIEWED" ? new Date() : undefined,
+      acceptedAt: status === "ACCEPTED" ? new Date() : undefined,
+      rejectedAt: status === "REJECTED" ? new Date() : undefined
+    },
     include: { sellerProfile: true, commissions: true }
   });
 
@@ -240,6 +259,7 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
   revalidatePath("/admin/cotizaciones");
   revalidatePath("/admin/ventas");
   revalidatePath("/admin");
+  if (quote.publicToken) revalidatePath(`/cotizaciones/${quote.publicToken}`);
 }
 
 export async function updateCommissionStatusAction(id: string, formData: FormData) {
@@ -701,6 +721,85 @@ export async function deleteProjectAction(id: string) {
   await prisma.project.delete({ where: { id } });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
+}
+
+export async function createProjectProgressAction(projectId: string, formData: FormData) {
+  const { session } = await requireActionRole(["SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT", "EDITOR", "ADMIN", "SUPER_ADMIN"]);
+  const title = value(formData, "title");
+  const body = value(formData, "body");
+  if (!title || !body) return;
+  const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
+
+  await prisma.projectProgress.create({
+    data: {
+      projectId,
+      staffProfileId: profile?.id,
+      title,
+      body,
+      milestone: value(formData, "milestone"),
+      files: listFromTextarea(formData, "files")
+    }
+  });
+  revalidatePath("/admin/proyectos");
+  revalidatePath("/admin/tecnicos");
+}
+
+export async function updateTechnicalProfileAction(id: string, formData: FormData) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN", "ENGINEER"]);
+  await prisma.staffProfile.update({
+    where: { id },
+    data: {
+      roleTitle: value(formData, "roleTitle") || "",
+      phone: value(formData, "phone"),
+      department: (value(formData, "department") as StaffDepartment | undefined) || "FIELD_ENGINEERING",
+      specialties: listFromTextarea(formData, "specialties"),
+      ...staffTechnicalFieldsFromForm(formData),
+      active: checked(formData, "active")
+    }
+  });
+  revalidatePath("/admin/tecnicos");
+  revalidatePath("/admin/equipo");
+}
+
+export async function updateTicketAction(id: string, formData: FormData) {
+  await requireActionRole(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const status = (value(formData, "status") as TicketStatus | undefined) || "OPEN";
+  await prisma.ticket.update({
+    where: { id },
+    data: {
+      status,
+      priority: (value(formData, "priority") as TicketPriority | undefined) || "MEDIUM",
+      category: (value(formData, "category") as TicketCategory | undefined) || "TECHNICAL_QUERY",
+      assignedProfileId: nullableValue(formData, "assignedProfileId"),
+      closedAt: ticketClosedAt(status)
+    }
+  });
+  revalidatePath("/admin/tickets");
+  revalidatePath("/portal");
+  revalidatePath("/admin");
+}
+
+export async function sendTicketMessageAction(id: string, formData: FormData) {
+  const body = value(formData, "body");
+  if (!body) return;
+  const { session } = await requireActionRole(["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+
+  await prisma.ticket.update({
+    where: { id },
+    data: {
+      status: "WAITING_CUSTOMER",
+      messages: {
+        create: {
+          authorId: session.user.id,
+          sender: "staff",
+          body,
+          files: listFromTextarea(formData, "files")
+        }
+      }
+    }
+  });
+  revalidatePath("/admin/tickets");
+  revalidatePath("/portal");
 }
 
 export async function deleteStaffProfileAction(id: string) {

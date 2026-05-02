@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const passwordHash = await bcrypt.hash("Admin12345!", 12);
+  const clientPasswordHash = await bcrypt.hash("Cliente12345!", 12);
   await prisma.user.upsert({
     where: { email: "admin@icctopografia.pe" },
     update: {},
@@ -30,6 +31,11 @@ async function main() {
       commissionRate: 5,
       monthlyGoal: 60000,
       territory: "Lima Metropolitana y cuentas B2B",
+      availability: "AVAILABLE" as const,
+      workZone: "Lima y provincias",
+      experience: "12 anos en venta tecnica B2B",
+      certifications: ["Instrumentacion topografica", "Asesoria GNSS"],
+      documents: [],
       specialties: ["Estaciones totales", "GNSS", "Compra B2B", "Cotizaciones"],
       tools: {
         whatsappTemplate: "Gracias por contactar a ICC Topografia. Para cotizar correctamente necesito confirmar aplicacion, ciudad, plazo y accesorios requeridos.",
@@ -48,6 +54,11 @@ async function main() {
       fixedCommission: 0,
       monthlyGoal: 0,
       territory: "Soporte nacional",
+      availability: "AVAILABLE" as const,
+      workZone: "Laboratorio y soporte remoto",
+      experience: "8 anos en mantenimiento y calibracion",
+      certifications: ["Calibracion de niveles", "Diagnostico de estaciones totales"],
+      documents: [],
       specialties: ["Calibracion", "Mantenimiento", "Soporte tecnico", "Garantias"],
       tools: {
         whatsappTemplate: "Para revisar tu caso tecnico necesito modelo, serie, falla observada y fecha del ultimo mantenimiento.",
@@ -65,6 +76,11 @@ async function main() {
       commissionRate: 3,
       monthlyGoal: 45000,
       territory: "Servicios de campo",
+      availability: "FIELD" as const,
+      workZone: "Costa central",
+      experience: "10 anos en control y replanteo de obra",
+      certifications: ["Geodesia aplicada", "Control geometrico QA/QC"],
+      documents: [],
       specialties: ["Levantamiento", "Replanteo", "Georreferenciacion", "Control geometrico"],
       tools: {
         whatsappTemplate: "Para dimensionar el servicio necesito ubicacion, area aproximada, entregables requeridos y fecha objetivo.",
@@ -155,10 +171,25 @@ async function main() {
     });
   }
 
+  const clientUser = await prisma.user.upsert({
+    where: { email: "operaciones@urbania-demo.pe" },
+    update: {
+      passwordHash: clientPasswordHash,
+      role: "CUSTOMER"
+    },
+    create: {
+      name: "Mariana Torres",
+      email: "operaciones@urbania-demo.pe",
+      passwordHash: clientPasswordHash,
+      role: "CUSTOMER"
+    }
+  });
+
   const client = await prisma.client.upsert({
     where: { email: "operaciones@urbania-demo.pe" },
-    update: {},
+    update: { userId: clientUser.id },
     create: {
+      userId: clientUser.id,
       name: "Mariana Torres",
       company: "Urbania Capital Demo",
       email: "operaciones@urbania-demo.pe",
@@ -191,9 +222,10 @@ async function main() {
 
   await prisma.quote.upsert({
     where: { number: "COT-2026-0001" },
-    update: {},
+    update: { publicToken: "cot-demo-urbania-2026" },
     create: {
       number: "COT-2026-0001",
+      publicToken: "cot-demo-urbania-2026",
       clientId: client.id,
       leadId: lead.id,
       sellerProfileId: seller?.id,
@@ -236,6 +268,52 @@ async function main() {
       status: "PUBLISHED",
       isPublic: true,
       isFeatured: true
+    }
+  });
+
+  await prisma.clientDocument.upsert({
+    where: { id: "seed-client-document-urbania" },
+    update: {},
+    create: {
+      id: "seed-client-document-urbania",
+      clientId: client.id,
+      title: "Propuesta tecnica de control topografico",
+      type: "cotizacion",
+      url: "/brochure-ayb-topografia.pdf"
+    }
+  });
+
+  const support = await prisma.staffProfile.findUnique({ where: { email: "soporte@icctopografia.pe" } });
+  await prisma.ticket.upsert({
+    where: { code: "TK-2026-0001" },
+    update: {},
+    create: {
+      code: "TK-2026-0001",
+      clientId: client.id,
+      assignedProfileId: support?.id,
+      customerName: client.name,
+      customerEmail: client.email,
+      company: client.company,
+      subject: "Revision preventiva de estacion total",
+      category: "CALIBRATION",
+      priority: "HIGH",
+      status: "REVIEWING",
+      description: "Solicitamos agenda para calibracion y verificacion antes de iniciar obra.",
+      attachments: [],
+      messages: {
+        create: [
+          {
+            sender: "customer",
+            body: "Necesitamos confirmar disponibilidad para calibracion esta semana.",
+            files: []
+          },
+          {
+            sender: "staff",
+            body: "Recibido. Validaremos agenda de laboratorio y requisitos de recepcion del equipo.",
+            files: []
+          }
+        ]
+      }
     }
   });
 }

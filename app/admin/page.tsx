@@ -6,17 +6,29 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 export default async function AdminPage() {
-  const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN"]);
-  if (session.user.role === "TECHNICIAN") {
+  const session = await requireAdminPage(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
+  if (["TECHNICIAN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"].includes(session.user.role || "")) {
     const profile = await prisma.staffProfile.findUnique({ where: { userId: session.user.id } });
-    const assignedChats = profile
-      ? await prisma.chatConversation.findMany({
-          where: { assignedProfileId: profile.id },
-          include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
-          orderBy: { updatedAt: "desc" },
-          take: 8
-        })
-      : [];
+    const [assignedChats, assignedTickets, assignedProjects] = profile
+      ? await Promise.all([
+          prisma.chatConversation.findMany({
+            where: { assignedProfileId: profile.id },
+            include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+            orderBy: { updatedAt: "desc" },
+            take: 8
+          }),
+          prisma.ticket.findMany({
+            where: { assignedProfileId: profile.id, status: { notIn: ["RESOLVED", "CLOSED"] } },
+            orderBy: { updatedAt: "desc" },
+            take: 8
+          }),
+          prisma.projectMember.findMany({
+            where: { staffProfileId: profile.id },
+            include: { project: true },
+            take: 8
+          })
+        ])
+      : [[], [], []];
 
     return (
       <section>
@@ -26,6 +38,7 @@ export default async function AdminPage() {
             <p className="mt-2 text-muted-foreground">{profile ? `Bandeja de ${profile.displayName}` : "Tu usuario aun no tiene perfil vinculado."}</p>
           </div>
           <Button asChild><Link href="/admin/chat">Ver mis chats</Link></Button>
+          <Button asChild variant="outline"><Link href="/admin/tickets">Ver tickets</Link></Button>
         </div>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           <Card>
@@ -42,8 +55,16 @@ export default async function AdminPage() {
               <p className="text-sm font-semibold">Especialidad</p>
             </CardHeader>
           </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>Soporte asignado</CardDescription>
+              <CardTitle className="text-3xl">{assignedTickets.length}</CardTitle>
+              <p className="text-sm font-semibold">Tickets activos</p>
+            </CardHeader>
+          </Card>
         </div>
-        <Card className="mt-8">
+        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+        <Card>
           <CardHeader>
             <CardTitle>Mis chats recientes</CardTitle>
             <CardDescription>Conversaciones asignadas por administracion comercial.</CardDescription>
@@ -58,6 +79,28 @@ export default async function AdminPage() {
             {!assignedChats.length ? <p className="text-sm text-muted-foreground">Todavia no tienes chats asignados.</p> : null}
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Mis proyectos y tickets</CardTitle>
+            <CardDescription>Asignaciones tecnicas activas.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {assignedProjects.map((member) => (
+              <div key={member.id} className="rounded-md border p-3">
+                <p className="font-semibold">{member.project.title}</p>
+                <p className="text-sm text-muted-foreground">{member.role} | {member.project.status}</p>
+              </div>
+            ))}
+            {assignedTickets.map((ticket) => (
+              <div key={ticket.id} className="rounded-md border p-3">
+                <p className="font-semibold">{ticket.code} - {ticket.subject}</p>
+                <p className="text-sm text-muted-foreground">{ticket.status}</p>
+              </div>
+            ))}
+            {!assignedProjects.length && !assignedTickets.length ? <p className="text-sm text-muted-foreground">Sin asignaciones activas.</p> : null}
+          </CardContent>
+        </Card>
+        </div>
       </section>
     );
   }
@@ -74,7 +117,8 @@ export default async function AdminPage() {
     acceptedQuoteSum,
     pendingCommissions,
     activeProjects,
-    rentableProducts
+    rentableProducts,
+    openTickets
   ] = await prisma.$transaction([
     prisma.product.count({ where: { isActive: true } }),
     prisma.order.count({ where: { status: "PENDING" } }),
@@ -87,7 +131,8 @@ export default async function AdminPage() {
     prisma.quote.aggregate({ where: { status: "ACCEPTED" }, _sum: { total: true } }),
     prisma.commission.count({ where: { status: { in: ["PENDING", "APPROVED"] } } }),
     prisma.project.count({ where: { status: { in: ["PLANNING", "IN_PROGRESS"] } } }),
-    prisma.product.count({ where: { isActive: true, commercialMode: { in: ["alquiler", "ambos"] } } })
+    prisma.product.count({ where: { isActive: true, commercialMode: { in: ["alquiler", "ambos"] } } }),
+    prisma.ticket.count({ where: { status: { in: ["OPEN", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER"] } } })
   ]);
   const conversionRate = wonQuotes + lostQuotes ? Math.round((wonQuotes / (wonQuotes + lostQuotes)) * 100) : 0;
 
@@ -117,6 +162,7 @@ export default async function AdminPage() {
           ["Comisiones pendientes", pendingCommissions, "Por aprobar o pagar"],
           ["Proyectos activos", activeProjects, "Planificacion / ejecucion"],
           ["Equipos alquiler", rentableProducts, "Disponibles para renta"],
+          ["Tickets abiertos", openTickets, "Soporte y garantia"],
           ["Tasa cierre", `${conversionRate}%`, "Ganadas vs perdidas"]
         ].map(([title, value, text]) => (
           <Card key={String(title)}>

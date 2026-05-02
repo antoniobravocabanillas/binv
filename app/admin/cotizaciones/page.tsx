@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,7 +86,7 @@ export default async function AdminQuotesPage() {
                   <th className="p-3">Items</th>
                   <th className="p-3">Total</th>
                   <th className="p-3">Estado</th>
-                  <th className="p-3">Accion</th>
+                  <th className="p-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -100,13 +101,17 @@ export default async function AdminQuotesPage() {
                     <td className="p-3">{quote.items.map((item) => item.description).join(", ")}</td>
                     <td className="p-3 font-semibold">{quote.currency} {Number(quote.total).toLocaleString("en-US")}</td>
                     <td className="p-3"><StatusBadge status={quote.status} /></td>
-                    <td className="p-3">
+                    <td className="p-3 space-y-2">
                       <form action={updateQuoteStatusAction.bind(null, quote.id)} className="flex gap-2">
                         <select name="status" defaultValue={quote.status} className="h-9 rounded-md border bg-background px-2 text-xs">
                           {quoteStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                         </select>
                         <Button type="submit" size="sm" variant="outline">Guardar</Button>
                       </form>
+                      <div className="flex flex-wrap gap-2">
+                        {quote.publicToken ? <Button asChild size="sm" variant="outline"><Link href={`/cotizaciones/${quote.publicToken}`} target="_blank">Link cliente</Link></Button> : null}
+                        <Button asChild size="sm" variant="outline"><Link href={`/api/quotes/${quote.id}/pdf`} target="_blank">PDF</Link></Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
