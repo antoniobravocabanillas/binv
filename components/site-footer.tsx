@@ -26,8 +26,6 @@ export function SiteFooter() {
           <ul className="mt-3 space-y-2 text-sm text-white/72">
             <li><Link href="/privacidad">Privacidad</Link></li>
             <li><Link href="/terminos">Terminos</Link></li>
-            <li><a href={brand.manual}>Manual de marca</a></li>
-            <li><Link href="/admin">Admin</Link></li>
           </ul>
         </div>
       </div>

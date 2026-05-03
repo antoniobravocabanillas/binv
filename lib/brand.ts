@@ -5,7 +5,7 @@ export const brand = {
   tagline: "Ingenieria, construccion y consultoria",
   descriptor: "Topografia, geodesia, ingenieria e instrumentacion",
   logoHorizontal: "/images/icc-logo-horizontal.jpeg",
-  logoBadge: "/images/icc-logo-badge.jpeg",
+  logoBadge: "/images/logo.png",
   manual: "/brand-manual-icc.pdf",
   legacyBrochure: "/brochure-ayb-topografia.pdf",
   colors: {
