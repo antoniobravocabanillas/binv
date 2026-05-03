@@ -20,24 +20,40 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminSalesPage() {
-  await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const [sellers, commissions, sales, wonQuotes] = await Promise.all([
-    prisma.staffProfile.findMany({
-      where: { department: "SALES" },
+  const session = await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const role = String(session.user.role);
+  const canManageCommercialConditions = ["ADMIN", "SUPER_ADMIN"].includes(role);
+  const sellerWhere = canManageCommercialConditions
+    ? { department: "SALES" as const }
+    : {
+        department: "SALES" as const,
+        OR: [
+          { userId: session.user.id },
+          ...(session.user.email ? [{ email: session.user.email }] : [])
+        ]
+      };
+
+  const sellers = await prisma.staffProfile.findMany({
+    where: sellerWhere,
       include: {
         assignedLeads: true,
         quotes: true,
         commissions: true
       },
       orderBy: [{ active: "desc" }, { displayName: "asc" }]
-    }),
+    });
+
+  const sellerIds = sellers.map((seller) => seller.id);
+  const restrictedSellerIds = sellerIds.length ? sellerIds : ["__no_seller_profile__"];
+  const [commissions, sales, wonQuotes] = await Promise.all([
     prisma.commission.findMany({
+      where: canManageCommercialConditions ? undefined : { sellerProfileId: { in: restrictedSellerIds } },
       include: { sellerProfile: true, quote: true },
       orderBy: { createdAt: "desc" },
       take: 80
     }),
     prisma.sale.findMany({
-      where: { deletedAt: null },
+      where: canManageCommercialConditions ? { deletedAt: null } : { deletedAt: null, sellerProfileId: { in: restrictedSellerIds } },
       include: {
         company: true,
         contact: true,
@@ -50,7 +66,9 @@ export default async function AdminSalesPage() {
       take: 80
     }),
     prisma.quote.aggregate({
-      where: { status: "ACCEPTED", deletedAt: null },
+      where: canManageCommercialConditions
+        ? { status: "ACCEPTED", deletedAt: null }
+        : { status: "ACCEPTED", deletedAt: null, sellerProfileId: { in: restrictedSellerIds } },
       _sum: { total: true }
     })
   ]);
@@ -64,7 +82,11 @@ export default async function AdminSalesPage() {
       <div>
         <p className="text-sm font-semibold uppercase text-primary">CRM comercial</p>
         <h1 className="font-display text-3xl font-bold">Ventas, vendedores y comisiones</h1>
-        <p className="mt-2 text-muted-foreground">Controla desempeno comercial, metas, comisiones generadas y pagos pendientes.</p>
+        <p className="mt-2 text-muted-foreground">
+          {canManageCommercialConditions
+            ? "Controla desempeno comercial, metas, comisiones generadas y pagos pendientes."
+            : "Consulta tus ventas asignadas, objetivos y comisiones. Las condiciones comerciales solo las modifica administracion."}
+        </p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-3">
@@ -113,13 +135,15 @@ export default async function AdminSalesPage() {
                       <td className="p-3">
                         {sale.projects.length ? (
                           <span className="text-xs font-semibold text-muted-foreground">Proyecto creado</span>
-                        ) : (
+                        ) : canManageCommercialConditions ? (
                           <form action={createProject} className="grid gap-2">
                             <Input name="title" placeholder="Nombre del proyecto" defaultValue={`Proyecto ${customerName}`} />
                             <Input name="location" placeholder="Ubicacion" />
                             <Textarea name="summary" placeholder="Alcance operativo inicial" className="min-h-20" />
                             <Button type="submit" size="sm">Crear proyecto</Button>
                           </form>
+                        ) : (
+                          <span className="text-xs font-semibold text-muted-foreground">Pendiente de apertura por administracion</span>
                         )}
                       </td>
                     </tr>
@@ -150,17 +174,26 @@ export default async function AdminSalesPage() {
                   <SmallStat label="Cierre" value={`${closeRate}%`} />
                   <SmallStat label="Pendiente" value={`USD ${pendingTotal.toLocaleString("en-US")}`} />
                 </div>
-                <form action={updateSellerCommercialAction.bind(null, seller.id)} className="grid gap-3 md:grid-cols-2">
-                  <select name="commissionType" defaultValue={seller.commissionType} className="h-11 rounded-md border bg-background px-3 text-sm">
-                    {commissionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                  <Input name="commissionRate" type="number" step="0.01" defaultValue={String(seller.commissionRate)} placeholder="% comision" />
-                  <Input name="fixedCommission" type="number" step="0.01" defaultValue={String(seller.fixedCommission)} placeholder="Monto fijo" />
-                  <Input name="monthlyGoal" type="number" step="0.01" defaultValue={String(seller.monthlyGoal)} placeholder="Meta mensual" />
-                  <Input name="territory" defaultValue={seller.territory || ""} placeholder="Zona / cartera" />
-                  <Input name="internalNotes" defaultValue={seller.internalNotes || ""} placeholder="Observaciones internas" />
-                  <Button type="submit" className="md:col-span-2">Guardar reglas comerciales</Button>
-                </form>
+                {canManageCommercialConditions ? (
+                  <form action={updateSellerCommercialAction.bind(null, seller.id)} className="grid gap-3 md:grid-cols-2">
+                    <select name="commissionType" defaultValue={seller.commissionType} className="h-11 rounded-md border bg-background px-3 text-sm">
+                      {commissionTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                    <Input name="commissionRate" type="number" step="0.01" defaultValue={String(seller.commissionRate)} placeholder="% comision" />
+                    <Input name="fixedCommission" type="number" step="0.01" defaultValue={String(seller.fixedCommission)} placeholder="Monto fijo" />
+                    <Input name="monthlyGoal" type="number" step="0.01" defaultValue={String(seller.monthlyGoal)} placeholder="Meta mensual" />
+                    <Input name="territory" defaultValue={seller.territory || ""} placeholder="Zona / cartera" />
+                    <Input name="internalNotes" defaultValue={seller.internalNotes || ""} placeholder="Observaciones internas" />
+                    <Button type="submit" className="md:col-span-2">Guardar reglas comerciales</Button>
+                  </form>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <ReadOnlyField label="Tipo de comision" value={commissionTypes.find(([value]) => value === seller.commissionType)?.[1] || seller.commissionType} />
+                    <ReadOnlyField label="Comision" value={`${Number(seller.commissionRate || 0)}%`} />
+                    <ReadOnlyField label="Meta mensual" value={formatCurrency(Number(seller.monthlyGoal || 0))} />
+                    <ReadOnlyField label="Cartera" value={seller.territory || "Sin cartera asignada"} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -194,12 +227,16 @@ export default async function AdminSalesPage() {
                     <td className="p-3 font-semibold">USD {Number(commission.amount).toLocaleString("en-US")}</td>
                     <td className="p-3"><StatusBadge status={commission.status} /></td>
                     <td className="p-3">
-                      <form action={updateCommissionStatusAction.bind(null, commission.id)} className="flex gap-2">
-                        <select name="status" defaultValue={commission.status} className="h-9 rounded-md border bg-background px-2 text-xs">
-                          {["PENDING", "APPROVED", "PAID", "CANCELLED"].map((status) => <option key={status} value={status}>{status}</option>)}
-                        </select>
-                        <Button type="submit" size="sm" variant="outline">Guardar</Button>
-                      </form>
+                      {canManageCommercialConditions ? (
+                        <form action={updateCommissionStatusAction.bind(null, commission.id)} className="flex gap-2">
+                          <select name="status" defaultValue={commission.status} className="h-9 rounded-md border bg-background px-2 text-xs">
+                            {["PENDING", "APPROVED", "PAID", "CANCELLED"].map((status) => <option key={status} value={status}>{status}</option>)}
+                          </select>
+                          <Button type="submit" size="sm" variant="outline">Guardar</Button>
+                        </form>
+                      ) : (
+                        <span className="text-xs font-semibold text-muted-foreground">Solo administracion</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -210,6 +247,15 @@ export default async function AdminSalesPage() {
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <p className="text-xs font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="mt-1 font-medium">{value}</p>
+    </div>
   );
 }
 

@@ -29,5 +29,8 @@ export const leadStatusSchema = z.object({
 export const registerSchema = z.object({
   name: z.string().trim().min(2),
   email: z.string().email(),
-  password: z.string().min(8)
+  password: z.string().min(8),
+  company: z.string().trim().min(2),
+  document: z.string().trim().optional(),
+  phone: z.string().trim().optional()
 });

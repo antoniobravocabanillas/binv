@@ -4,6 +4,8 @@ import type { ElementType } from "react";
 import { FileText, FolderKanban, LifeBuoy, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { StatusBadge } from "@/components/admin/status-badge";
+import { SubmitButton } from "@/components/forms/submit-button";
+import { PortalFileUploader } from "@/components/portal/file-uploader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,10 @@ export const metadata = createMetadata({
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type ClientPortalPageProps = {
+  searchParams: Promise<{ success?: string; status?: string }>;
+};
+
 const ticketCategories = [
   ["EQUIPMENT", "Equipo"],
   ["SERVICE", "Servicio"],
@@ -32,30 +38,75 @@ const ticketCategories = [
   ["OTHER", "Otro"]
 ];
 
-export default async function ClientPortalPage() {
+const successMessages: Record<string, string> = {
+  profile: "Datos actualizados correctamente.",
+  ticket: "Ticket creado. El equipo ICC lo revisara y respondera desde soporte.",
+  reply: "Respuesta enviada al ticket.",
+  quote_accepted: "Cotizacion aceptada. El equipo comercial fue notificado.",
+  quote_rejected: "Cotizacion rechazada. El equipo comercial fue notificado."
+};
+
+export default async function ClientPortalPage({ searchParams }: ClientPortalPageProps) {
+  const params = await searchParams;
   const session = await auth();
   if (!session?.user?.email) redirect("/cuenta?callbackUrl=/portal");
 
-  const client = await prisma.client.upsert({
-    where: { email: session.user.email },
-    update: { userId: session.user.id },
-    create: {
-      userId: session.user.id,
-      name: session.user.name || session.user.email,
-      email: session.user.email,
-      contactName: session.user.name || session.user.email
+  const account = await prisma.clientAccount.findFirst({
+    where: {
+      OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
+      deletedAt: null
     },
     include: {
-      quotes: { include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
-      projects: { include: { images: { orderBy: { position: "asc" }, take: 1 }, progress: { orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { updatedAt: "desc" } },
-      tickets: { include: { assignedProfile: true, messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
-      documents: { orderBy: { createdAt: "desc" } }
+      company: true,
+      contact: true,
+      client: {
+        include: {
+          quotes: { include: { items: true, sellerProfile: true }, orderBy: { createdAt: "desc" } },
+          projects: { include: { images: { orderBy: { position: "asc" }, take: 1 }, progress: { orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { updatedAt: "desc" } },
+          tickets: { include: { assignedProfile: true, messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
+          documents: { orderBy: { createdAt: "desc" } }
+        }
+      }
     }
   });
+
+  if (!account || !["active", "approved"].includes(account.status) || !account.client) {
+    return (
+      <section className="bg-[#f6fbff] py-16">
+        <div className="container max-w-3xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Acceso pendiente de validacion</CardTitle>
+              <CardDescription>
+                Tu solicitud de portal cliente esta registrada, pero un administrador debe validar empresa, contacto y permisos antes de activar la cuenta.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border bg-muted/40 p-4 text-sm">
+                <p className="font-semibold">Estado actual: {account?.status || "sin solicitud vinculada"}</p>
+                <p className="mt-1 text-muted-foreground">Si ya eres cliente ICC, solicita a tu asesor que apruebe tu acceso desde Clientes 360.</p>
+              </div>
+              <Button asChild>
+                <Link href="/contacto">Contactar a ICC</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    );
+  }
+
+  const client = account.client;
 
   return (
     <section className="bg-[#f6fbff] py-12">
       <div className="container space-y-8">
+        {params.success && successMessages[params.success] ? (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            {successMessages[params.success]}
+          </div>
+        ) : null}
+
         <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
           <div className="rounded-lg border bg-[#03111D] p-7 text-white shadow-xl">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#24C8EE]">Portal ICC</p>
@@ -83,7 +134,7 @@ export default async function ClientPortalPage() {
                 <Input name="phone" defaultValue={client.phone || ""} placeholder="Telefono" />
                 <Input name="address" defaultValue={client.address || ""} placeholder="Direccion" />
                 <Input name="contactName" defaultValue={client.contactName || ""} placeholder="Contacto principal" />
-                <Button type="submit">Actualizar perfil</Button>
+                <SubmitButton pendingText="Actualizando...">Actualizar perfil</SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -116,11 +167,13 @@ export default async function ClientPortalPage() {
                       <>
                         <form action={respondPublicQuoteFromFormAction.bind(null, quote.publicToken)}>
                           <input type="hidden" name="status" value="ACCEPTED" />
-                          <Button type="submit" size="sm">Aceptar</Button>
+                          <input type="hidden" name="redirectTo" value="/portal?success=quote_accepted" />
+                          <SubmitButton size="sm" pendingText="Aceptando...">Aceptar</SubmitButton>
                         </form>
                         <form action={respondPublicQuoteFromFormAction.bind(null, quote.publicToken)}>
                           <input type="hidden" name="status" value="REJECTED" />
-                          <Button type="submit" size="sm" variant="outline">Rechazar</Button>
+                          <input type="hidden" name="redirectTo" value="/portal?success=quote_rejected" />
+                          <SubmitButton size="sm" variant="outline" pendingText="Enviando...">Rechazar</SubmitButton>
                         </form>
                       </>
                     ) : null}
@@ -149,8 +202,8 @@ export default async function ClientPortalPage() {
                   <option value="URGENT">Urgente</option>
                 </select>
                 <Textarea name="description" placeholder="Describe el equipo, servicio, falla o alcance solicitado" required />
-                <Textarea name="attachments" placeholder="URLs de fotos o archivos, uno por linea" />
-                <Button type="submit">Crear ticket</Button>
+                <PortalFileUploader name="attachments" label="Adjuntos" description="Sube fotos del equipo, evidencia o PDF de referencia." />
+                <SubmitButton pendingText="Creando ticket...">Crear ticket</SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -181,7 +234,7 @@ export default async function ClientPortalPage() {
                 </div>
                 <form action={replyCustomerTicketAction.bind(null, ticket.id)} className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
                   <Input name="body" placeholder="Responder ticket" />
-                  <Button type="submit" variant="outline">Enviar</Button>
+                  <SubmitButton variant="outline" pendingText="Enviando...">Enviar</SubmitButton>
                 </form>
               </div>
             ))}

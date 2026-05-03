@@ -1,5 +1,5 @@
 import { fail, handleApiError } from "@/lib/server/api";
-import { getProductMediaStore, PRODUCT_IMAGE_PREFIX } from "@/lib/server/media";
+import { CUSTOMER_FILE_PREFIX, getCustomerFileStore, getProductMediaStore, PRODUCT_IMAGE_PREFIX } from "@/lib/server/media";
 
 type MediaRouteProps = {
   params: Promise<{ key: string[] }>;
@@ -13,11 +13,11 @@ export async function GET(_request: Request, { params }: MediaRouteProps) {
     const { key: keyParts } = await params;
     const key = keyParts.join("/");
 
-    if (!key.startsWith(`${PRODUCT_IMAGE_PREFIX}/`)) {
+    if (!key.startsWith(`${PRODUCT_IMAGE_PREFIX}/`) && !key.startsWith(`${CUSTOMER_FILE_PREFIX}/`)) {
       return fail("Archivo no permitido", 403);
     }
 
-    const store = getProductMediaStore();
+    const store = key.startsWith(`${CUSTOMER_FILE_PREFIX}/`) ? getCustomerFileStore() : getProductMediaStore();
     const entry = await store.getWithMetadata(key, { type: "arrayBuffer" });
     if (!entry) return fail("Archivo no encontrado", 404);
 

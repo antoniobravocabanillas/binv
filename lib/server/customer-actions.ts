@@ -22,18 +22,33 @@ async function requireClient() {
   const session = await auth();
   if (!session?.user?.email) redirect("/cuenta?callbackUrl=/portal");
 
-  const client = await prisma.client.upsert({
+  const account = await prisma.clientAccount.findFirst({
+    where: {
+      OR: [{ userId: session.user.id }, { user: { email: session.user.email } }],
+      deletedAt: null
+    },
+    include: { client: true, company: true, contact: true }
+  });
+
+  if (!account || !["active", "approved"].includes(account.status)) {
+    redirect("/portal?status=pending_approval");
+  }
+
+  const client = account.client || await prisma.client.upsert({
     where: { email: session.user.email },
-    update: { userId: session.user.id },
+    update: { userId: session.user.id, companyId: account.companyId },
     create: {
       userId: session.user.id,
-      name: session.user.name || session.user.email,
+      companyId: account.companyId,
+      name: account.contact?.name || session.user.name || session.user.email,
+      company: account.company.tradeName || account.company.legalName,
       email: session.user.email,
-      contactName: session.user.name || session.user.email
+      phone: account.contact?.phone || account.company.phone,
+      contactName: account.contact?.name || session.user.name || session.user.email
     }
   });
 
-  return { session, client };
+  return { session, client, account };
 }
 
 function ticketCode() {
@@ -42,19 +57,50 @@ function ticketCode() {
 }
 
 export async function updateClientProfileAction(formData: FormData) {
-  const { client } = await requireClient();
+  const { client, account } = await requireClient();
+  const name = value(formData, "name") || client.name;
+  const company = value(formData, "company") || client.company || account.company.legalName;
+  const document = value(formData, "document");
+  const phone = value(formData, "phone");
+  const address = value(formData, "address");
+  const contactName = value(formData, "contactName") || name;
+
   await prisma.client.update({
     where: { id: client.id },
     data: {
-      name: value(formData, "name") || client.name,
-      company: value(formData, "company"),
-      document: value(formData, "document"),
-      phone: value(formData, "phone"),
-      address: value(formData, "address"),
-      contactName: value(formData, "contactName")
+      name,
+      company,
+      document,
+      phone,
+      address,
+      contactName
     }
   });
+
+  await prisma.company.update({
+    where: { id: account.companyId },
+    data: {
+      legalName: company,
+      tradeName: company,
+      document,
+      phone,
+      address
+    }
+  });
+
+  if (account.contactId) {
+    await prisma.contact.update({
+      where: { id: account.contactId },
+      data: {
+        name: contactName,
+        phone,
+        whatsapp: phone
+      }
+    });
+  }
+
   revalidatePath("/portal");
+  redirect("/portal?success=profile");
 }
 
 export async function createCustomerTicketAction(formData: FormData) {
@@ -95,6 +141,7 @@ export async function createCustomerTicketAction(formData: FormData) {
   revalidatePath("/portal");
   revalidatePath("/admin/tickets");
   revalidatePath("/admin/notificaciones");
+  redirect("/portal?success=ticket");
 }
 
 export async function replyCustomerTicketAction(ticketId: string, formData: FormData) {
@@ -123,6 +170,7 @@ export async function replyCustomerTicketAction(ticketId: string, formData: Form
   });
   revalidatePath("/portal");
   revalidatePath("/admin/tickets");
+  redirect("/portal?success=reply");
 }
 
 export async function respondPublicQuoteAction(token: string, status: QuoteStatus) {
@@ -171,4 +219,6 @@ export async function respondPublicQuoteFromFormAction(token: string, formData: 
   const status = value(formData, "status") as QuoteStatus | undefined;
   if (!status) return;
   await respondPublicQuoteAction(token, status);
+  const redirectTo = value(formData, "redirectTo");
+  redirect(redirectTo || `/cotizaciones/${token}?success=${status === "ACCEPTED" ? "quote_accepted" : "quote_rejected"}`);
 }

@@ -4,7 +4,6 @@ import { ChangeEvent, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { ImagePlus, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 
 type UploadedImage = {
   url: string;
@@ -53,10 +52,6 @@ export function ProductImageUploader({ initialImages = [] }: ProductImageUploade
     }
   }
 
-  function handleManualImages(value: string) {
-    setImages(value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean));
-  }
-
   function removeImage(image: string) {
     setImages((current) => current.filter((item) => item !== image));
   }
@@ -100,13 +95,7 @@ export function ProductImageUploader({ initialImages = [] }: ProductImageUploade
         </div>
       )}
 
-      <Textarea
-        name="images"
-        value={imagesValue}
-        onChange={(event) => handleManualImages(event.target.value)}
-        placeholder={"https://cdn.ejemplo.com/estacion-total-frontal.jpg\nhttps://cdn.ejemplo.com/estacion-total-kit.jpg"}
-        rows={4}
-      />
+      <input type="hidden" name="images" value={imagesValue} />
       {status ? <p className="text-xs font-normal text-muted-foreground">{status}</p> : null}
     </div>
   );

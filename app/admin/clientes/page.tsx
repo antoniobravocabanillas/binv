@@ -1,27 +1,39 @@
 import Link from "next/link";
 import { ArrowRight, Building2, FileText, LifeBuoy } from "lucide-react";
+import { SubmitButton } from "@/components/forms/submit-button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { approveClientAccountAction, rejectClientAccountAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminClientsPage() {
-  await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
-  const clients = await prisma.client.findMany({
-    where: { deletedAt: null },
-    include: {
-      companyRef: { include: { contacts: { where: { deletedAt: null } } } },
-      leads: true,
-      quotes: true,
-      projects: true,
-      sales: true,
-      tickets: true
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 120
-  });
+  const session = await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
+  const canApproveClients = ["ADMIN", "SUPER_ADMIN"].includes(String(session.user.role));
+  const [clients, pendingAccounts] = await Promise.all([
+    prisma.client.findMany({
+      where: { deletedAt: null },
+      include: {
+        companyRef: { include: { contacts: { where: { deletedAt: null } } } },
+        leads: true,
+        quotes: true,
+        projects: true,
+        sales: true,
+        tickets: true
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 120
+    }),
+    prisma.clientAccount.findMany({
+      where: { status: "pending_approval", deletedAt: null },
+      include: { company: true, contact: true, client: true, user: true },
+      orderBy: { createdAt: "desc" },
+      take: 40
+    })
+  ]);
 
   return (
     <section className="space-y-8">
@@ -36,6 +48,43 @@ export default async function AdminClientsPage() {
         <Metric icon={FileText} label="Cotizaciones asociadas" value={clients.reduce((sum, client) => sum + client.quotes.length, 0)} />
         <Metric icon={LifeBuoy} label="Base soporte" value="Preparado" />
       </div>
+
+      {pendingAccounts.length ? (
+        <Card className="border-primary/30">
+          <CardHeader>
+            <CardTitle>Solicitudes de acceso al portal</CardTitle>
+            <CardDescription>Valida empresa y contacto antes de habilitar el login de cliente.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3">
+              {pendingAccounts.map((account) => {
+                const approveAction = approveClientAccountAction.bind(null, account.id);
+                const rejectAction = rejectClientAccountAction.bind(null, account.id);
+                return (
+                  <div key={account.id} className="grid gap-3 rounded-md border bg-muted/20 p-4 md:grid-cols-[1fr_auto] md:items-center">
+                    <div>
+                      <p className="font-semibold">{account.client?.name || account.contact?.name || account.user?.name || "Cliente pendiente"}</p>
+                      <p className="text-sm text-muted-foreground">{account.company.tradeName || account.company.legalName} | {account.user?.email || account.contact?.email}</p>
+                    </div>
+                    {canApproveClients ? (
+                      <div className="flex flex-wrap gap-2">
+                        <form action={approveAction}>
+                          <SubmitButton size="sm" pendingText="Aprobando...">Aprobar acceso</SubmitButton>
+                        </form>
+                        <form action={rejectAction}>
+                          <SubmitButton size="sm" variant="outline" pendingText="Rechazando...">Rechazar</SubmitButton>
+                        </form>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled>Requiere admin</Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

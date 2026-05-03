@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, LayoutDashboard, LockKeyhole, MessageCircle, ShieldCheck, UserRound } from "lucide-react";
 import { auth } from "@/auth";
+import { ClientRegistrationForm } from "@/components/auth/client-registration-form";
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export default async function AccountPage() {
           </div>
         </div>
 
-        <div>
+        <div className="space-y-5">
           {session?.user ? (
             <Card className="overflow-hidden border-white/14 bg-white text-foreground shadow-2xl">
               <CardHeader className="border-b bg-[#f7fbfd]">
@@ -75,7 +76,10 @@ export default async function AccountPage() {
               </CardContent>
             </Card>
           ) : (
-            <SignInForm />
+            <>
+              <SignInForm />
+              <ClientRegistrationForm />
+            </>
           )}
         </div>
       </div>

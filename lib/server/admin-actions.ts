@@ -620,7 +620,7 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
 }
 
 export async function updateCommissionStatusAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
   const status = value(formData, "status") as "PENDING" | "APPROVED" | "PAID" | "CANCELLED";
   await prisma.commission.update({
     where: { id },
@@ -1010,7 +1010,7 @@ export async function updateStaffProfileAction(id: string, formData: FormData) {
 }
 
 export async function updateSellerCommercialAction(id: string, formData: FormData) {
-  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
   await prisma.staffProfile.update({
     where: { id },
     data: staffCommercialFieldsFromForm(formData)
@@ -1367,4 +1367,61 @@ export async function unlinkStaffAccessAction(profileId: string) {
   });
   revalidatePath("/admin/equipo");
   revalidatePath("/admin/chat");
+}
+
+export async function approveClientAccountAction(accountId: string) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const account = await prisma.clientAccount.update({
+    where: { id: accountId },
+    data: { status: "active" },
+    include: { client: true, company: true }
+  });
+
+  await prisma.company.update({
+    where: { id: account.companyId },
+    data: { status: "cliente activo" }
+  });
+
+  if (account.clientId) {
+    await prisma.client.update({
+      where: { id: account.clientId },
+      data: { status: "cliente activo" }
+    });
+  }
+
+  await prisma.notification.create({
+    data: {
+      type: "SYSTEM",
+      title: "Acceso cliente aprobado",
+      body: `${account.client?.name || account.company.legalName} ya puede ingresar al portal.`,
+      href: `/admin/clientes${account.clientId ? `/${account.clientId}` : ""}`
+    }
+  });
+
+  revalidatePath("/admin/clientes");
+  revalidatePath("/portal");
+}
+
+export async function rejectClientAccountAction(accountId: string) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN"]);
+  const account = await prisma.clientAccount.update({
+    where: { id: accountId },
+    data: { status: "rejected" },
+    include: { client: true, company: true }
+  });
+
+  await prisma.company.update({
+    where: { id: account.companyId },
+    data: { status: "registro rechazado" }
+  });
+
+  if (account.clientId) {
+    await prisma.client.update({
+      where: { id: account.clientId },
+      data: { status: "registro rechazado" }
+    });
+  }
+
+  revalidatePath("/admin/clientes");
+  revalidatePath("/portal");
 }
