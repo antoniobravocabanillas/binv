@@ -50,6 +50,25 @@ enum LeadPriority {
   URGENT
 }
 
+enum OpportunityStatus {
+  OPEN
+  DISCOVERY
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum SaleStatus {
+  PENDING
+  CONFIRMED
+  INVOICED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
 enum CommissionType {
   SALE_PERCENTAGE
   MARGIN_PERCENTAGE
@@ -80,6 +99,21 @@ enum ProjectStatus {
   FINISHED
   PUBLISHED
   ARCHIVED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
 }
 
 enum ProjectRole {
@@ -150,6 +184,19 @@ enum NotificationType {
   SYSTEM
 }
 
+enum ActivityAction {
+  CREATED
+  UPDATED
+  DELETED
+  STATUS_CHANGED
+  CONVERTED
+  ASSIGNED
+  COMMENTED
+  UPLOADED
+  APPROVED
+  REJECTED
+}
+
 enum ChatStatus {
   WAITING
   ACTIVE
@@ -181,16 +228,101 @@ model User {
   ticketMessages   TicketMessage[]
   internalMessages InternalChatMessage[]
   notifications    Notification[]
+  activityLogs     ActivityLog[]
   staffProfile     StaffProfile?
   clientProfile    Client?
+  clientAccounts   ClientAccount[]
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
+}
+
+model Company {
+  id            String          @id @default(cuid())
+  legalName     String
+  tradeName     String?
+  document      String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  industry      String?
+  status        String          @default("prospecto")
+  contacts      Contact[]
+  accounts      ClientAccount[]
+  clients       Client[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  quotes        Quote[]
+  sales         Sale[]
+  projects      Project[]
+  tickets       Ticket[]
+  documents     Document[]
+  activities    ActivityLog[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+
+  @@index([document])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model Contact {
+  id             String          @id @default(cuid())
+  companyId      String
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  roleTitle      String?
+  email          String?
+  phone          String?
+  whatsapp       String?
+  isPrimary      Boolean         @default(false)
+  clientAccounts ClientAccount[]
+  leads          Lead[]
+  opportunities  Opportunity[]
+  quotes         Quote[]
+  sales          Sale[]
+  tickets        Ticket[]
+  documents      Document[]
+  activities     ActivityLog[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([companyId, email])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+model ClientAccount {
+  id          String    @id @default(cuid())
+  userId      String?   @unique
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  clientId    String?   @unique
+  client      Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  status      String    @default("invited")
+  invitedAt   DateTime?
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([status])
 }
 
 model Client {
   id          String           @id @default(cuid())
   userId      String?          @unique
   user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  companyId   String?
+  companyRef  Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  account     ClientAccount?
   name        String
   company     String?
   document    String?
@@ -204,11 +336,15 @@ model Client {
   projects    Project[]
   tickets     Ticket[]
   documents   ClientDocument[]
+  sales       Sale[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
 
   @@index([email])
   @@index([status])
+  @@index([companyId])
+  @@index([deletedAt])
 }
 
 model Account {
@@ -457,6 +593,10 @@ model Lead {
   id                String        @id @default(cuid())
   clientId          String?
   client            Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId         String?
+  companyRef        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId         String?
+  contact           Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignedProfileId String?
   assignedProfile   StaffProfile? @relation("LeadAssignedProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
   name              String
@@ -472,13 +612,19 @@ model Lead {
   status            LeadStatus    @default(NEW)
   notes             LeadNote[]
   quotes            Quote[]
+  opportunity       Opportunity?
+  activities        ActivityLog[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
 
   @@index([status, createdAt])
   @@index([email])
   @@index([assignedProfileId])
   @@index([clientId])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([deletedAt])
 }
 
 model LeadNote {
@@ -497,6 +643,12 @@ model Quote {
   number          String        @unique
   clientId        String?
   client          Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId       String?
+  companyRef      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId       String?
+  contact         Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId   String?
+  opportunity     Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   leadId          String?
   lead            Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
   sellerProfileId String?
@@ -520,12 +672,19 @@ model Quote {
   rejectedAt      DateTime?
   items           QuoteItem[]
   commissions     Commission[]
+  sale            Sale?
+  activities      ActivityLog[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
 
   @@index([status, createdAt])
   @@index([sellerProfileId])
   @@index([clientId])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([opportunityId])
+  @@index([deletedAt])
 }
 
 model QuoteItem {
@@ -563,6 +722,74 @@ model Commission {
 
   @@index([sellerProfileId, status])
   @@index([quoteId])
+}
+
+model Opportunity {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  title           String
+  companyId       String
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId       String?
+  contact         Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  leadId          String?           @unique
+  lead            Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  sellerProfileId String?
+  sellerProfile   StaffProfile?     @relation("OpportunitySellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
+  status          OpportunityStatus @default(OPEN)
+  source          String?
+  interest        String?
+  estimatedValue  Decimal?
+  probability     Int               @default(25)
+  nextStep        String?
+  nextFollowUpAt  DateTime?
+  notes           String?
+  quotes          Quote[]
+  sales           Sale[]
+  activities      ActivityLog[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+  projects        Project[]
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([sellerProfileId])
+  @@index([status, createdAt])
+  @@index([deletedAt])
+}
+
+model Sale {
+  id               String        @id @default(cuid())
+  number           String        @unique
+  quoteId          String?       @unique
+  quote            Quote?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  opportunityId    String?
+  opportunity      Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  clientId         String?
+  client           Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId        String?
+  company          Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId        String?
+  contact          Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  sellerProfileId  String?
+  sellerProfile    StaffProfile? @relation("SaleSellerProfile", fields: [sellerProfileId], references: [id], onDelete: SetNull)
+  status           SaleStatus    @default(PENDING)
+  currency         String        @default("USD")
+  amount           Decimal       @default(0)
+  commissionAmount Decimal       @default(0)
+  paidAt           DateTime?
+  projects         Project[]
+  activities       ActivityLog[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  @@index([status, createdAt])
+  @@index([companyId])
+  @@index([clientId])
+  @@index([sellerProfileId])
+  @@index([deletedAt])
 }
 
 model ContactMessage {
@@ -720,9 +947,12 @@ model StaffProfile {
   active          Boolean               @default(true)
   assignedChats   ChatConversation[]
   assignedLeads   Lead[]                @relation("LeadAssignedProfile")
+  opportunities   Opportunity[]         @relation("OpportunitySellerProfile")
   quotes          Quote[]               @relation("QuoteSellerProfile")
+  sales           Sale[]                @relation("SaleSellerProfile")
   commissions     Commission[]          @relation("CommissionSellerProfile")
   projectMembers  ProjectMember[]
+  tasks           Task[]                @relation("TaskAssigneeProfile")
   ticketAssignee  Ticket[]              @relation("TicketAssigneeProfile")
   progressEntries ProjectProgress[]
   createdAt       DateTime              @default(now())
@@ -737,6 +967,12 @@ model Project {
   slug            String            @unique
   clientId        String?
   client          Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId       String?
+  company         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunityId   String?
+  opportunity     Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  saleId          String?
+  sale            Sale?             @relation(fields: [saleId], references: [id], onDelete: SetNull)
   clientName      String?
   location        String?
   category        String?
@@ -752,12 +988,20 @@ model Project {
   images          ProjectImage[]
   members         ProjectMember[]
   progress        ProjectProgress[]
+  milestones      Milestone[]
+  tasks           Task[]
+  documents       Document[]
+  activities      ActivityLog[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
 
   @@index([status, isPublic])
   @@index([isFeatured])
   @@index([clientId])
+  @@index([companyId])
+  @@index([opportunityId])
+  @@index([deletedAt])
 }
 
 model ProjectImage {
@@ -801,11 +1045,61 @@ model ProjectProgress {
   @@index([staffProfileId])
 }
 
+model Milestone {
+  id          String          @id @default(cuid())
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      MilestoneStatus @default(PENDING)
+  dueDate     DateTime?
+  completedAt DateTime?
+  tasks       Task[]
+  documents   Document[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  @@index([projectId, status])
+  @@index([dueDate])
+  @@index([deletedAt])
+}
+
+model Task {
+  id                String        @id @default(cuid())
+  projectId         String
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId       String?
+  milestone         Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  assignedProfileId String?
+  assignedProfile   StaffProfile? @relation("TaskAssigneeProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  title             String
+  description       String?
+  status            TaskStatus    @default(TODO)
+  dueDate           DateTime?
+  completedAt       DateTime?
+  documents         Document[]
+  activities        ActivityLog[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  @@index([projectId, status])
+  @@index([milestoneId])
+  @@index([assignedProfileId])
+  @@index([dueDate])
+  @@index([deletedAt])
+}
+
 model Ticket {
   id                String          @id @default(cuid())
   code              String          @unique
   clientId          String?
   client            Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  companyId         String?
+  companyRef        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId         String?
+  contact           Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignedProfileId String?
   assignedProfile   StaffProfile?   @relation("TicketAssigneeProfile", fields: [assignedProfileId], references: [id], onDelete: SetNull)
   customerName      String
@@ -818,14 +1112,20 @@ model Ticket {
   description       String
   attachments       String[]
   messages          TicketMessage[]
+  documents         Document[]
+  activities        ActivityLog[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   closedAt          DateTime?
+  deletedAt         DateTime?
 
   @@index([status, createdAt])
   @@index([clientId])
+  @@index([companyId])
+  @@index([contactId])
   @@index([assignedProfileId])
   @@index([customerEmail])
+  @@index([deletedAt])
 }
 
 model TicketMessage {
@@ -853,4 +1153,73 @@ model ClientDocument {
   createdAt DateTime @default(now())
 
   @@index([clientId, createdAt])
+}
+
+model Document {
+  id          String     @id @default(cuid())
+  title       String
+  url         String
+  type        String?
+  visibility  String     @default("internal")
+  companyId   String?
+  company     Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId   String?
+  contact     Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  projectId   String?
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  taskId      String?
+  task        Task?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  ticketId    String?
+  ticket      Ticket?    @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([ticketId])
+  @@index([visibility])
+  @@index([deletedAt])
+}
+
+model ActivityLog {
+  id            String         @id @default(cuid())
+  actorId       String?
+  actor         User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action        ActivityAction
+  entityType    String
+  entityId      String
+  title         String
+  body          String?
+  metadata      Json?
+  companyId     String?
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId     String?
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  leadId        String?
+  lead          Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  quoteId       String?
+  quote         Quote?         @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  saleId        String?
+  sale          Sale?          @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  taskId        String?
+  task          Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  ticketId      String?
+  ticket        Ticket?        @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+
+  @@index([entityType, entityId])
+  @@index([companyId, createdAt])
+  @@index([leadId, createdAt])
+  @@index([opportunityId, createdAt])
+  @@index([quoteId, createdAt])
+  @@index([saleId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([ticketId, createdAt])
 }

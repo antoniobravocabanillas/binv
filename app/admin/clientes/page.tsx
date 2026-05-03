@@ -1,4 +1,5 @@
-import { Building2, FileText, LifeBuoy } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Building2, FileText, LifeBuoy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
@@ -9,10 +10,14 @@ export const revalidate = 0;
 export default async function AdminClientsPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"]);
   const clients = await prisma.client.findMany({
+    where: { deletedAt: null },
     include: {
+      companyRef: { include: { contacts: { where: { deletedAt: null } } } },
       leads: true,
       quotes: true,
-      projects: true
+      projects: true,
+      sales: true,
+      tickets: true
     },
     orderBy: { updatedAt: "desc" },
     take: 120
@@ -48,14 +53,16 @@ export default async function AdminClientsPage() {
                   <th className="p-3">Estado</th>
                   <th className="p-3">Leads</th>
                   <th className="p-3">Cotizaciones</th>
+                  <th className="p-3">Ventas</th>
                   <th className="p-3">Proyectos</th>
+                  <th className="p-3">Accion</th>
                 </tr>
               </thead>
               <tbody>
                 {clients.map((client) => (
                   <tr key={client.id} className="border-t">
                     <td className="p-3 font-medium">{client.name}</td>
-                    <td className="p-3">{client.company || "-"}</td>
+                    <td className="p-3">{client.companyRef?.tradeName || client.companyRef?.legalName || client.company || "-"}</td>
                     <td className="p-3">
                       <div>{client.email}</div>
                       <div className="text-xs text-muted-foreground">{client.phone || "-"}</div>
@@ -63,10 +70,16 @@ export default async function AdminClientsPage() {
                     <td className="p-3 capitalize">{client.status}</td>
                     <td className="p-3">{client.leads.length}</td>
                     <td className="p-3">{client.quotes.length}</td>
+                    <td className="p-3">{client.sales.length}</td>
                     <td className="p-3">{client.projects.length}</td>
+                    <td className="p-3">
+                      <Link href={`/admin/clientes/${client.id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                        Ficha 360 <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </td>
                   </tr>
                 ))}
-                {!clients.length ? <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Aun no hay clientes registrados.</td></tr> : null}
+                {!clients.length ? <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">Aun no hay clientes registrados.</td></tr> : null}
               </tbody>
             </table>
           </div>

@@ -3,8 +3,10 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/prisma";
-import { updateCommissionStatusAction, updateSellerCommercialAction } from "@/lib/server/admin-actions";
+import { formatCurrency } from "@/lib/utils";
+import { createProjectFromSaleAction, updateCommissionStatusAction, updateSellerCommercialAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const commissionTypes = [
@@ -19,7 +21,7 @@ export const revalidate = 0;
 
 export default async function AdminSalesPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const [sellers, commissions, wonQuotes] = await Promise.all([
+  const [sellers, commissions, sales, wonQuotes] = await Promise.all([
     prisma.staffProfile.findMany({
       where: { department: "SALES" },
       include: {
@@ -34,8 +36,21 @@ export default async function AdminSalesPage() {
       orderBy: { createdAt: "desc" },
       take: 80
     }),
+    prisma.sale.findMany({
+      where: { deletedAt: null },
+      include: {
+        company: true,
+        contact: true,
+        client: true,
+        sellerProfile: true,
+        quote: true,
+        projects: true
+      },
+      orderBy: { createdAt: "desc" },
+      take: 80
+    }),
     prisma.quote.aggregate({
-      where: { status: "ACCEPTED" },
+      where: { status: "ACCEPTED", deletedAt: null },
       _sum: { total: true }
     })
   ]);
@@ -57,6 +72,65 @@ export default async function AdminSalesPage() {
         <MetricCard icon={WalletCards} label="Comisiones pendientes" value={`USD ${pendingCommissionTotal.toLocaleString("en-US")}`} />
         <MetricCard icon={Target} label="Vendedores activos" value={String(sellers.filter((seller) => seller.active).length)} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ventas y ordenes comerciales</CardTitle>
+          <CardDescription>Cuando una cotizacion se acepta, se crea una venta trazable y desde aqui puede abrirse el proyecto operativo.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full min-w-[1100px] text-sm">
+              <thead className="bg-muted text-left">
+                <tr>
+                  <th className="p-3">Venta</th>
+                  <th className="p-3">Cliente / empresa</th>
+                  <th className="p-3">Vendedor</th>
+                  <th className="p-3">Monto</th>
+                  <th className="p-3">Estado</th>
+                  <th className="p-3">Proyecto</th>
+                  <th className="p-3">Accion operativa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sales.map((sale) => {
+                  const createProject = createProjectFromSaleAction.bind(null, sale.id);
+                  const customerName = sale.company?.tradeName || sale.company?.legalName || sale.client?.company || sale.contact?.name || "Cliente por completar";
+                  return (
+                    <tr key={sale.id} className="border-t align-top">
+                      <td className="p-3">
+                        <div className="font-semibold">{sale.number}</div>
+                        <div className="text-xs text-muted-foreground">{sale.quote?.number || "Sin cotizacion"}</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-medium">{customerName}</div>
+                        <div className="text-xs text-muted-foreground">{sale.contact?.email || sale.client?.email || "-"}</div>
+                      </td>
+                      <td className="p-3">{sale.sellerProfile?.displayName || "-"}</td>
+                      <td className="p-3 font-semibold">{formatCurrency(Number(sale.amount), sale.currency)}</td>
+                      <td className="p-3"><StatusBadge status={sale.status} /></td>
+                      <td className="p-3">{sale.projects[0]?.title || "Pendiente de apertura"}</td>
+                      <td className="p-3">
+                        {sale.projects.length ? (
+                          <span className="text-xs font-semibold text-muted-foreground">Proyecto creado</span>
+                        ) : (
+                          <form action={createProject} className="grid gap-2">
+                            <Input name="title" placeholder="Nombre del proyecto" defaultValue={`Proyecto ${customerName}`} />
+                            <Input name="location" placeholder="Ubicacion" />
+                            <Textarea name="summary" placeholder="Alcance operativo inicial" className="min-h-20" />
+                            <Button type="submit" size="sm">Crear proyecto</Button>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!sales.length ? <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Aun no hay ventas convertidas.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 xl:grid-cols-2">
         {sellers.map((seller) => {

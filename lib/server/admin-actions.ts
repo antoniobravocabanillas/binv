@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { BotQuestionStatus, CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
+import { ActivityAction, BotQuestionStatus, CommissionType, Prisma, Role, StaffDepartment, TechnicalAvailability, TicketCategory, TicketPriority, TicketStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/server/api";
@@ -99,30 +99,205 @@ function ticketClosedAt(status?: string) {
   return status === "CLOSED" || status === "RESOLVED" ? new Date() : null;
 }
 
+function opportunityCode() {
+  const now = new Date();
+  return `OPP-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
+}
+
+function saleNumber() {
+  const now = new Date();
+  return `SALE-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
+}
+
+async function createActivityLog(data: {
+  action: ActivityAction;
+  entityType: string;
+  entityId: string;
+  title: string;
+  body?: string;
+  companyId?: string | null;
+  contactId?: string | null;
+  leadId?: string | null;
+  opportunityId?: string | null;
+  quoteId?: string | null;
+  saleId?: string | null;
+  projectId?: string | null;
+  ticketId?: string | null;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  const session = await auth();
+  await prisma.activityLog.create({
+    data: {
+      actorId: session?.user?.id,
+      ...data
+    }
+  });
+}
+
+async function upsertCompanyAndContactFromForm(formData: FormData) {
+  const companyName = value(formData, "company") || value(formData, "companyName");
+  const contactEmail = value(formData, "customerEmail") || value(formData, "email");
+  const contactName = value(formData, "customerName") || value(formData, "name");
+  if (!companyName && !contactEmail && !contactName) return { company: null, contact: null };
+
+  const explicitCompanyId = value(formData, "companyId");
+  const document = value(formData, "document");
+  const companyLookup = [
+    document ? { document } : undefined,
+    companyName ? { legalName: companyName } : undefined,
+    companyName ? { tradeName: companyName } : undefined,
+    contactEmail ? { email: contactEmail } : undefined
+  ].filter(Boolean) as Prisma.CompanyWhereInput[];
+  const existing = explicitCompanyId
+    ? await prisma.company.findUnique({ where: { id: explicitCompanyId } })
+    : companyLookup.length
+      ? await prisma.company.findFirst({
+        where: {
+          deletedAt: null,
+          OR: companyLookup
+        }
+      })
+      : null;
+
+  const company = existing
+    ? await prisma.company.update({
+        where: { id: existing.id },
+        data: {
+          tradeName: companyName || existing.tradeName,
+          document: document || existing.document,
+          email: contactEmail || existing.email,
+          phone: value(formData, "phone") || existing.phone
+        }
+      })
+    : await prisma.company.create({
+        data: {
+          legalName: companyName || contactName || contactEmail || "Empresa sin nombre",
+          tradeName: companyName,
+          document,
+          email: contactEmail,
+          phone: value(formData, "phone")
+        }
+      });
+
+  const contact = contactEmail || contactName
+    ? await prisma.contact.upsert({
+        where: { companyId_email: { companyId: company.id, email: contactEmail || "" } },
+        update: {
+          name: contactName || contactEmail || "Contacto",
+          phone: value(formData, "phone")
+        },
+        create: {
+          companyId: company.id,
+          name: contactName || contactEmail || "Contacto",
+          email: contactEmail,
+          phone: value(formData, "phone"),
+          whatsapp: value(formData, "phone"),
+          isPrimary: true
+        }
+      }).catch(async () => prisma.contact.create({
+        data: {
+          companyId: company.id,
+          name: contactName || contactEmail || "Contacto",
+          email: contactEmail,
+          phone: value(formData, "phone"),
+          whatsapp: value(formData, "phone"),
+          isPrimary: true
+        }
+      }))
+    : null;
+
+  return { company, contact };
+}
+
+async function upsertCompanyAndContactFromLead(leadId: string) {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  if (!lead) throw new Error("Lead no encontrado.");
+  if (lead.companyId) {
+    const company = await prisma.company.findUnique({ where: { id: lead.companyId } });
+    const contact = lead.contactId ? await prisma.contact.findUnique({ where: { id: lead.contactId } }) : null;
+    return { lead, company, contact };
+  }
+  const company = await prisma.company.create({
+    data: {
+      legalName: lead.company || lead.name,
+      tradeName: lead.company,
+      email: lead.email,
+      phone: lead.phone,
+      status: "prospecto"
+    }
+  });
+  const contact = await prisma.contact.create({
+    data: {
+      companyId: company.id,
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      whatsapp: lead.phone,
+      isPrimary: true
+    }
+  });
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { companyId: company.id, contactId: contact.id }
+  });
+  return { lead, company, contact };
+}
+
 async function upsertClientFromContact(formData: FormData) {
   const email = value(formData, "customerEmail") || value(formData, "email");
   const name = value(formData, "customerName") || value(formData, "name") || "Cliente sin nombre";
   if (!email) return null;
+  const { company, contact } = await upsertCompanyAndContactFromForm(formData);
 
-  return prisma.client.upsert({
+  const client = await prisma.client.upsert({
     where: { email },
     update: {
       name,
       company: value(formData, "company"),
-      phone: value(formData, "phone")
+      phone: value(formData, "phone"),
+      companyId: company?.id
     },
     create: {
       name,
       email,
       company: value(formData, "company"),
       phone: value(formData, "phone"),
-      contactName: name
+      contactName: name,
+      companyId: company?.id
     }
   });
+
+  if (company) {
+    await prisma.clientAccount.upsert({
+      where: { clientId: client.id },
+      update: {
+        companyId: company.id,
+        contactId: contact?.id
+      },
+      create: {
+        clientId: client.id,
+        userId: client.userId,
+        companyId: company.id,
+        contactId: contact?.id,
+        status: client.userId ? "active" : "invited",
+        invitedAt: client.userId ? null : new Date()
+      }
+    });
+  }
+
+  return client;
 }
 
 export async function deleteLeadAction(id: string) {
-  await prisma.lead.delete({ where: { id } });
+  await prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } });
+  await createActivityLog({
+    action: "DELETED",
+    entityType: "Lead",
+    entityId: id,
+    leadId: id,
+    title: "Lead archivado",
+    body: "El lead fue marcado como eliminado sin borrar historial."
+  });
   revalidatePath("/admin/leads");
   revalidatePath("/admin");
 }
@@ -165,6 +340,130 @@ export async function createLeadNoteAction(id: string, formData: FormData) {
   revalidatePath("/admin/leads");
 }
 
+export async function convertLeadToOpportunityAction(id: string) {
+  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const { lead, company, contact } = await upsertCompanyAndContactFromLead(id);
+  if (!company) throw new Error("No se pudo crear empresa para la oportunidad.");
+  const existing = await prisma.opportunity.findUnique({ where: { leadId: id } });
+  if (existing) {
+    revalidatePath("/admin/oportunidades");
+    return;
+  }
+
+  const opportunity = await prisma.opportunity.create({
+    data: {
+      code: opportunityCode(),
+      title: lead.interest || `Oportunidad - ${lead.company || lead.name}`,
+      companyId: company.id,
+      contactId: contact?.id,
+      leadId: lead.id,
+      sellerProfileId: lead.assignedProfileId,
+      source: lead.source,
+      interest: lead.interest,
+      estimatedValue: lead.estimatedValue,
+      nextFollowUpAt: lead.nextFollowUpAt,
+      notes: lead.message
+    }
+  });
+  await prisma.lead.update({ where: { id }, data: { status: "QUALIFIED" } });
+  await createActivityLog({
+    action: "CONVERTED",
+    entityType: "Opportunity",
+    entityId: opportunity.id,
+    title: `Lead convertido en oportunidad ${opportunity.code}`,
+    leadId: lead.id,
+    opportunityId: opportunity.id,
+    companyId: company.id,
+    contactId: contact?.id
+  });
+  await prisma.notification.create({
+    data: {
+      type: "LEAD",
+      title: "Lead convertido en oportunidad",
+      body: `${lead.name} - ${opportunity.title}`,
+      href: "/admin/oportunidades"
+    }
+  });
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin/oportunidades");
+  revalidatePath("/admin/clientes");
+  revalidatePath("/admin/notificaciones");
+}
+
+export async function convertOpportunityToQuoteAction(id: string, formData: FormData) {
+  await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
+  const opportunity = await prisma.opportunity.findUnique({
+    where: { id },
+    include: { company: true, contact: true, lead: true, quotes: true }
+  });
+  if (!opportunity) throw new Error("Oportunidad no encontrada.");
+  const now = new Date();
+  const number = `COT-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
+  const unitPrice = numberValue(formData, "unitPrice", Number(opportunity.estimatedValue || 0));
+  const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
+  const subtotal = unitPrice * quantity;
+  const client = opportunity.contact?.email
+    ? await prisma.client.upsert({
+        where: { email: opportunity.contact.email },
+        update: {
+          name: opportunity.contact.name,
+          company: opportunity.company.tradeName || opportunity.company.legalName,
+          phone: opportunity.contact.phone,
+          companyId: opportunity.companyId
+        },
+        create: {
+          name: opportunity.contact.name,
+          email: opportunity.contact.email,
+          company: opportunity.company.tradeName || opportunity.company.legalName,
+          phone: opportunity.contact.phone,
+          contactName: opportunity.contact.name,
+          companyId: opportunity.companyId
+        }
+      })
+    : null;
+
+  const quote = await prisma.quote.create({
+    data: {
+      number,
+      clientId: client?.id,
+      companyId: opportunity.companyId,
+      contactId: opportunity.contactId,
+      opportunityId: opportunity.id,
+      leadId: opportunity.leadId,
+      sellerProfileId: opportunity.sellerProfileId,
+      customerName: opportunity.contact?.name || opportunity.company.tradeName || opportunity.company.legalName,
+      customerEmail: opportunity.contact?.email,
+      company: opportunity.company.tradeName || opportunity.company.legalName,
+      subtotal,
+      total: subtotal,
+      observations: value(formData, "observations") || opportunity.notes,
+      items: {
+        create: {
+          type: value(formData, "itemType") || "service",
+          description: value(formData, "description") || opportunity.title,
+          quantity,
+          unitPrice,
+          subtotal
+        }
+      }
+    }
+  });
+  await prisma.opportunity.update({ where: { id }, data: { status: "PROPOSAL" } });
+  await createActivityLog({
+    action: "CONVERTED",
+    entityType: "Quote",
+    entityId: quote.id,
+    title: `Oportunidad convertida en cotizacion ${quote.number}`,
+    leadId: opportunity.leadId,
+    opportunityId: opportunity.id,
+    quoteId: quote.id,
+    companyId: opportunity.companyId,
+    contactId: opportunity.contactId
+  });
+  revalidatePath("/admin/oportunidades");
+  revalidatePath("/admin/cotizaciones");
+}
+
 export async function updateOrderStatusAction(id: string, formData: FormData) {
   const status = value(formData, "status") as "PENDING" | "QUOTED" | "PAID" | "PROCESSING" | "SHIPPED" | "COMPLETED" | "CANCELLED";
   const notes = value(formData, "notes");
@@ -182,6 +481,7 @@ export async function deleteOrderAction(id: string) {
 export async function createQuoteAction(formData: FormData) {
   await requireActionRole(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const client = await upsertClientFromContact(formData);
+  const { company, contact } = await upsertCompanyAndContactFromForm(formData);
   const quantity = Math.max(numberValue(formData, "quantity", 1), 1);
   const unitPrice = numberValue(formData, "unitPrice");
   const discount = numberValue(formData, "discount");
@@ -191,10 +491,13 @@ export async function createQuoteAction(formData: FormData) {
   const now = new Date();
   const number = `COT-${now.getFullYear()}-${String(now.getTime()).slice(-7)}`;
 
-  await prisma.quote.create({
+  const quote = await prisma.quote.create({
     data: {
       number,
       clientId: client?.id,
+      companyId: company?.id || client?.companyId,
+      contactId: contact?.id,
+      opportunityId: nullableValue(formData, "opportunityId"),
       leadId: nullableValue(formData, "leadId"),
       sellerProfileId: nullableValue(formData, "sellerProfileId"),
       customerName: value(formData, "customerName") || client?.name || "",
@@ -223,7 +526,19 @@ export async function createQuoteAction(formData: FormData) {
       }
     }
   });
+  await createActivityLog({
+    action: "CREATED",
+    entityType: "Quote",
+    entityId: quote.id,
+    title: `Cotizacion ${number} creada`,
+    body: value(formData, "description"),
+    companyId: company?.id || client?.companyId,
+    contactId: contact?.id,
+    leadId: nullableValue(formData, "leadId"),
+    opportunityId: nullableValue(formData, "opportunityId")
+  });
   revalidatePath("/admin/cotizaciones");
+  revalidatePath("/admin/oportunidades");
   revalidatePath("/admin");
 }
 
@@ -238,7 +553,7 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
       acceptedAt: status === "ACCEPTED" ? new Date() : undefined,
       rejectedAt: status === "REJECTED" ? new Date() : undefined
     },
-    include: { sellerProfile: true, commissions: true }
+    include: { sellerProfile: true, commissions: true, sale: true, client: true }
   });
 
   if (status === "ACCEPTED" && quote.sellerProfileId && !quote.commissions.length) {
@@ -256,8 +571,50 @@ export async function updateQuoteStatusAction(id: string, formData: FormData) {
     });
   }
 
+  if (status === "ACCEPTED" && !quote.sale) {
+    const sale = await prisma.sale.create({
+      data: {
+        number: saleNumber(),
+        quoteId: quote.id,
+        opportunityId: quote.opportunityId,
+        clientId: quote.clientId,
+        companyId: quote.companyId || quote.client?.companyId,
+        contactId: quote.contactId,
+        sellerProfileId: quote.sellerProfileId,
+        status: "CONFIRMED",
+        currency: quote.currency,
+        amount: quote.total,
+        commissionAmount: quote.sellerProfile ? Number(quote.total) * (Number(quote.sellerProfile.commissionRate || 0) / 100) : 0
+      }
+    });
+    await createActivityLog({
+      action: "CONVERTED",
+      entityType: "Sale",
+      entityId: sale.id,
+      title: `Venta ${sale.number} creada desde cotizacion`,
+      quoteId: quote.id,
+      saleId: sale.id,
+      companyId: sale.companyId,
+      contactId: sale.contactId,
+      opportunityId: sale.opportunityId
+    });
+  }
+
+  await createActivityLog({
+    action: "STATUS_CHANGED",
+    entityType: "Quote",
+    entityId: quote.id,
+    title: `Cotizacion ${quote.number} cambio a ${status}`,
+    quoteId: quote.id,
+    companyId: quote.companyId,
+    contactId: quote.contactId,
+    opportunityId: quote.opportunityId
+  });
+
   revalidatePath("/admin/cotizaciones");
   revalidatePath("/admin/ventas");
+  revalidatePath("/admin/clientes");
+  revalidatePath("/admin/oportunidades");
   revalidatePath("/admin");
   if (quote.publicToken) revalidatePath(`/cotizaciones/${quote.publicToken}`);
 }
@@ -665,10 +1022,16 @@ export async function updateSellerCommercialAction(id: string, formData: FormDat
 export async function createProjectAction(formData: FormData) {
   await requireActionRole(["EDITOR", "ADMIN", "SUPER_ADMIN"]);
   const title = value(formData, "title") || "";
+  const clientId = nullableValue(formData, "clientId");
+  const client = clientId ? await prisma.client.findUnique({ where: { id: clientId } }) : null;
   await prisma.project.create({
     data: {
       title,
       slug: value(formData, "slug") || slugify(title),
+      clientId,
+      companyId: nullableValue(formData, "companyId") || client?.companyId,
+      opportunityId: nullableValue(formData, "opportunityId"),
+      saleId: nullableValue(formData, "saleId"),
       clientName: value(formData, "clientName"),
       location: value(formData, "location"),
       category: value(formData, "category"),
@@ -688,6 +1051,60 @@ export async function createProjectAction(formData: FormData) {
   });
   revalidatePath("/admin/proyectos");
   revalidatePath("/proyectos");
+}
+
+export async function createProjectFromSaleAction(id: string, formData: FormData) {
+  await requireActionRole(["ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "ENGINEER"]);
+  const sale = await prisma.sale.findUnique({
+    where: { id },
+    include: { quote: { include: { items: true } }, company: true, client: true }
+  });
+  if (!sale) throw new Error("Venta no encontrada.");
+  const existing = await prisma.project.findFirst({ where: { saleId: id, deletedAt: null } });
+  if (existing) {
+    revalidatePath("/admin/proyectos");
+    return;
+  }
+  const title = value(formData, "title") || sale.quote?.items[0]?.description || `Proyecto ${sale.number}`;
+  const project = await prisma.project.create({
+    data: {
+      title,
+      slug: value(formData, "slug") || slugify(`${title}-${sale.number}`),
+      saleId: sale.id,
+      opportunityId: sale.opportunityId,
+      clientId: sale.clientId,
+      companyId: sale.companyId,
+      clientName: sale.company?.tradeName || sale.company?.legalName || sale.client?.company || sale.client?.name,
+      location: value(formData, "location"),
+      category: value(formData, "category") || "Proyecto tecnico",
+      servicesApplied: listFromTextarea(formData, "servicesApplied"),
+      summary: value(formData, "summary") || `Proyecto creado desde venta ${sale.number}.`,
+      description: value(formData, "description") || sale.quote?.observations || `Ejecucion tecnica asociada a ${sale.number}.`,
+      status: "PLANNING",
+      milestones: {
+        create: [
+          { title: "Planificacion y alcance", description: "Validar alcance, equipo y cronograma." },
+          { title: "Ejecucion tecnica", description: "Trabajo de campo/gabinete segun servicio contratado." },
+          { title: "Entregables y cierre", description: "Entrega de informes, planos o evidencias." }
+        ]
+      }
+    }
+  });
+  await createActivityLog({
+    action: "CONVERTED",
+    entityType: "Project",
+    entityId: project.id,
+    title: `Venta ${sale.number} convertida en proyecto`,
+    saleId: sale.id,
+    projectId: project.id,
+    quoteId: sale.quoteId,
+    opportunityId: sale.opportunityId,
+    companyId: sale.companyId,
+    contactId: sale.contactId
+  });
+  revalidatePath("/admin/ventas");
+  revalidatePath("/admin/proyectos");
+  revalidatePath("/admin/clientes");
 }
 
 export async function updateProjectAction(id: string, formData: FormData) {

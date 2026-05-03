@@ -5,23 +5,24 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { brand } from "@/lib/brand";
 
 const adminNav = [
-  { label: "Dashboard", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
-  { label: "Ventas", href: "/admin/ventas", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Leads", href: "/admin/leads", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Cotizaciones", href: "/admin/cotizaciones", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Clientes", href: "/admin/clientes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
-  { label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
-  { label: "Proyectos", href: "/admin/proyectos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"] },
-  { label: "Tickets", href: "/admin/tickets", roles: ["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Tecnicos", href: "/admin/tecnicos", roles: ["ADMIN", "SUPER_ADMIN", "ENGINEER", "SURVEYOR", "ARCHITECT", "SUPPORT"] },
-  { label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
-  { label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
-  { label: "Chat interno", href: "/admin/chat-interno", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
-  { label: "Chatbot", href: "/admin/chatbot", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Reportes", href: "/admin/reportes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
-  { label: "Notificaciones", href: "/admin/notificaciones", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
-  { label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] }
+  { group: "Inicio", label: "Dashboard", href: "/admin", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
+  { group: "Comercial", label: "Leads", href: "/admin/leads", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Comercial", label: "Oportunidades", href: "/admin/oportunidades", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Comercial", label: "Cotizaciones", href: "/admin/cotizaciones", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Comercial", label: "Clientes 360", href: "/admin/clientes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
+  { group: "Comercial", label: "Ventas", href: "/admin/ventas", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Operacion", label: "Proyectos", href: "/admin/proyectos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT"] },
+  { group: "Operacion", label: "Tecnicos", href: "/admin/tecnicos", roles: ["ADMIN", "SUPER_ADMIN", "ENGINEER", "SURVEYOR", "ARCHITECT", "SUPPORT"] },
+  { group: "Soporte", label: "Tickets", href: "/admin/tickets", roles: ["SUPPORT", "TECHNICIAN", "SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Gestion", label: "Productos", href: "/admin/productos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
+  { group: "Gestion", label: "Pedidos", href: "/admin/pedidos", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Gestion", label: "Contenidos", href: "/admin/contenidos", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN"] },
+  { group: "Comunicacion", label: "Chat", href: "/admin/chat", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SUPPORT"] },
+  { group: "Comunicacion", label: "Chat interno", href: "/admin/chat-interno", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
+  { group: "Comunicacion", label: "Chatbot", href: "/admin/chatbot", roles: ["EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Gestion", label: "Reportes", href: "/admin/reportes", roles: ["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"] },
+  { group: "Gestion", label: "Notificaciones", href: "/admin/notificaciones", roles: ["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"] },
+  { group: "Gestion", label: "Equipo", href: "/admin/equipo", roles: ["ADMIN", "SUPER_ADMIN"] }
 ];
 
 const allowedRoles = new Set(["TECHNICIAN", "SALES", "EDITOR", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN", "SURVEYOR", "ENGINEER", "ARCHITECT", "SUPPORT"]);
@@ -32,14 +33,24 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!session?.user) redirect("/cuenta?callbackUrl=/admin");
   if (!allowedRoles.has(session.user.role || "")) redirect("/");
   const navItems = adminNav.filter((item) => item.roles.includes(session.user.role || ""));
+  const navGroups = Array.from(new Set(navItems.map((item) => item.group)));
 
   return (
     <div className="min-h-screen bg-[#f7f6f1]">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-[#063D63] p-5 text-white lg:block">
         <div className="font-bold">{brand.shortName} Admin</div>
         <p className="mt-2 text-xs text-white/60">{session.user.email}</p>
-        <nav className="mt-8 space-y-2">
-          {navItems.map((item) => <Link key={item.href} href={item.href} className="block rounded-md px-3 py-2 text-sm text-white/72 hover:bg-white/10 hover:text-white">{item.label}</Link>)}
+        <nav className="mt-6 max-h-[calc(100vh-9rem)] space-y-5 overflow-y-auto pr-1">
+          {navGroups.map((group) => (
+            <div key={group}>
+              <p className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">{group}</p>
+              <div className="mt-2 space-y-1">
+                {navItems.filter((item) => item.group === group).map((item) => (
+                  <Link key={item.href} href={item.href} className="block rounded-md px-3 py-2 text-sm text-white/72 hover:bg-white/10 hover:text-white">{item.label}</Link>
+                ))}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="absolute bottom-5 left-5 right-5">
           <SignOutButton className="w-full border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white" />

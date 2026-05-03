@@ -201,11 +201,57 @@ async function main() {
     }
   });
 
+  const company = await prisma.company.upsert({
+    where: { id: "seed-company-urbania" },
+    update: {
+      legalName: "Urbania Capital Demo S.A.C.",
+      tradeName: "Urbania Capital",
+      email: "operaciones@urbania-demo.pe",
+      phone: "+51 988 220 440",
+      city: "Lima",
+      industry: "Construccion e inmobiliaria",
+      status: "cliente activo"
+    },
+    create: {
+      id: "seed-company-urbania",
+      legalName: "Urbania Capital Demo S.A.C.",
+      tradeName: "Urbania Capital",
+      document: "20600000001",
+      email: "operaciones@urbania-demo.pe",
+      phone: "+51 988 220 440",
+      address: "Av. Republica de Panama 4500",
+      city: "Lima",
+      industry: "Construccion e inmobiliaria",
+      status: "cliente activo"
+    }
+  });
+
+  const contact = await prisma.contact.upsert({
+    where: { companyId_email: { companyId: company.id, email: "operaciones@urbania-demo.pe" } },
+    update: {
+      name: "Mariana Torres",
+      roleTitle: "Jefa de operaciones",
+      phone: "+51 988 220 440",
+      whatsapp: "+51 988 220 440",
+      isPrimary: true
+    },
+    create: {
+      companyId: company.id,
+      name: "Mariana Torres",
+      roleTitle: "Jefa de operaciones",
+      email: "operaciones@urbania-demo.pe",
+      phone: "+51 988 220 440",
+      whatsapp: "+51 988 220 440",
+      isPrimary: true
+    }
+  });
+
   const client = await prisma.client.upsert({
     where: { email: "operaciones@urbania-demo.pe" },
-    update: { userId: clientUser.id },
+    update: { userId: clientUser.id, companyId: company.id },
     create: {
       userId: clientUser.id,
+      companyId: company.id,
       name: "Mariana Torres",
       company: "Urbania Capital Demo",
       email: "operaciones@urbania-demo.pe",
@@ -215,13 +261,38 @@ async function main() {
     }
   });
 
+  await prisma.clientAccount.upsert({
+    where: { clientId: client.id },
+    update: {
+      userId: clientUser.id,
+      companyId: company.id,
+      contactId: contact.id,
+      status: "active"
+    },
+    create: {
+      userId: clientUser.id,
+      companyId: company.id,
+      contactId: contact.id,
+      clientId: client.id,
+      status: "active",
+      invitedAt: new Date()
+    }
+  });
+
   const seller = await prisma.staffProfile.findUnique({ where: { email: "ventas@icctopografia.pe" } });
   const lead = await prisma.lead.upsert({
     where: { id: "seed-lead-urbania" },
-    update: {},
+    update: {
+      companyId: company.id,
+      contactId: contact.id,
+      clientId: client.id,
+      assignedProfileId: seller?.id
+    },
     create: {
       id: "seed-lead-urbania",
       clientId: client.id,
+      companyId: company.id,
+      contactId: contact.id,
       assignedProfileId: seller?.id,
       name: "Mariana Torres",
       email: "operaciones@urbania-demo.pe",
@@ -236,13 +307,48 @@ async function main() {
     }
   });
 
-  await prisma.quote.upsert({
+  const opportunity = await prisma.opportunity.upsert({
+    where: { code: "OPP-2026-0001" },
+    update: {
+      companyId: company.id,
+      contactId: contact.id,
+      leadId: lead.id,
+      sellerProfileId: seller?.id,
+      status: "PROPOSAL"
+    },
+    create: {
+      code: "OPP-2026-0001",
+      title: "Control topografico semanal para corredor vial",
+      companyId: company.id,
+      contactId: contact.id,
+      leadId: lead.id,
+      sellerProfileId: seller?.id,
+      status: "PROPOSAL",
+      source: "web",
+      interest: "Servicio de control topografico",
+      estimatedValue: 18500,
+      probability: 70,
+      nextStep: "Enviar propuesta final y validar orden de servicio",
+      notes: "Proyecto demo para portal cliente y pipeline comercial."
+    }
+  });
+
+  const quote = await prisma.quote.upsert({
     where: { number: "COT-2026-0001" },
-    update: { publicToken: "cot-demo-urbania-2026" },
+    update: {
+      publicToken: "cot-demo-urbania-2026",
+      companyId: company.id,
+      contactId: contact.id,
+      opportunityId: opportunity.id,
+      clientId: client.id
+    },
     create: {
       number: "COT-2026-0001",
       publicToken: "cot-demo-urbania-2026",
       clientId: client.id,
+      companyId: company.id,
+      contactId: contact.id,
+      opportunityId: opportunity.id,
       leadId: lead.id,
       sellerProfileId: seller?.id,
       customerName: client.name,
@@ -265,13 +371,47 @@ async function main() {
     }
   });
 
-  await prisma.project.upsert({
+  const sale = await prisma.sale.upsert({
+    where: { number: "SALE-2026-0001" },
+    update: {
+      quoteId: quote.id,
+      opportunityId: opportunity.id,
+      clientId: client.id,
+      companyId: company.id,
+      contactId: contact.id,
+      sellerProfileId: seller?.id,
+      status: "CONFIRMED"
+    },
+    create: {
+      number: "SALE-2026-0001",
+      quoteId: quote.id,
+      opportunityId: opportunity.id,
+      clientId: client.id,
+      companyId: company.id,
+      contactId: contact.id,
+      sellerProfileId: seller?.id,
+      status: "CONFIRMED",
+      currency: "USD",
+      amount: 18500,
+      commissionAmount: 925
+    }
+  });
+
+  const project = await prisma.project.upsert({
     where: { slug: "control-topografico-corredor-vial-demo" },
-    update: {},
+    update: {
+      clientId: client.id,
+      companyId: company.id,
+      opportunityId: opportunity.id,
+      saleId: sale.id
+    },
     create: {
       title: "Control topografico para corredor vial demo",
       slug: "control-topografico-corredor-vial-demo",
       clientId: client.id,
+      companyId: company.id,
+      opportunityId: opportunity.id,
+      saleId: sale.id,
       clientName: client.company,
       location: "Lima, Peru",
       category: "Infraestructura vial",
@@ -284,6 +424,61 @@ async function main() {
       status: "PUBLISHED",
       isPublic: true,
       isFeatured: true
+    }
+  });
+
+  const kickoffMilestone = await prisma.milestone.upsert({
+    where: { id: "seed-milestone-urbania-kickoff" },
+    update: {
+      projectId: project.id,
+      status: "IN_PROGRESS"
+    },
+    create: {
+      id: "seed-milestone-urbania-kickoff",
+      projectId: project.id,
+      title: "Inicio y red de control",
+      description: "Validacion de informacion base, puntos geodesicos y protocolo de medicion.",
+      status: "IN_PROGRESS",
+      dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7)
+    }
+  });
+
+  await prisma.task.upsert({
+    where: { id: "seed-task-urbania-red-control" },
+    update: {
+      projectId: project.id,
+      milestoneId: kickoffMilestone.id,
+      assignedProfileId: seller?.id,
+      status: "IN_PROGRESS"
+    },
+    create: {
+      id: "seed-task-urbania-red-control",
+      projectId: project.id,
+      milestoneId: kickoffMilestone.id,
+      assignedProfileId: seller?.id,
+      title: "Revisar expediente y puntos base",
+      description: "Cruzar planos, coordenadas y restricciones de campo antes de iniciar replanteo.",
+      status: "IN_PROGRESS",
+      dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3)
+    }
+  });
+
+  await prisma.document.upsert({
+    where: { id: "seed-document-urbania-propuesta" },
+    update: {
+      companyId: company.id,
+      contactId: contact.id,
+      projectId: project.id
+    },
+    create: {
+      id: "seed-document-urbania-propuesta",
+      companyId: company.id,
+      contactId: contact.id,
+      projectId: project.id,
+      title: "Propuesta tecnica y comercial",
+      type: "cotizacion",
+      url: "/brochure-ayb-topografia.pdf",
+      visibility: "cliente"
     }
   });
 
@@ -302,10 +497,17 @@ async function main() {
   const support = await prisma.staffProfile.findUnique({ where: { email: "soporte@icctopografia.pe" } });
   await prisma.ticket.upsert({
     where: { code: "TK-2026-0001" },
-    update: {},
+    update: {
+      clientId: client.id,
+      companyId: company.id,
+      contactId: contact.id,
+      assignedProfileId: support?.id
+    },
     create: {
       code: "TK-2026-0001",
       clientId: client.id,
+      companyId: company.id,
+      contactId: contact.id,
       assignedProfileId: support?.id,
       customerName: client.name,
       customerEmail: client.email,
@@ -332,6 +534,58 @@ async function main() {
       }
     }
   });
+
+  await Promise.all([
+    prisma.activityLog.upsert({
+      where: { id: "seed-activity-urbania-lead" },
+      update: {},
+      create: {
+        id: "seed-activity-urbania-lead",
+        action: "CREATED",
+        entityType: "Lead",
+        entityId: lead.id,
+        title: "Lead web creado",
+        body: "Solicitud de control topografico desde formulario publico.",
+        companyId: company.id,
+        contactId: contact.id,
+        leadId: lead.id
+      }
+    }),
+    prisma.activityLog.upsert({
+      where: { id: "seed-activity-urbania-opportunity" },
+      update: {},
+      create: {
+        id: "seed-activity-urbania-opportunity",
+        action: "CONVERTED",
+        entityType: "Opportunity",
+        entityId: opportunity.id,
+        title: "Lead convertido a oportunidad",
+        body: "Se consolido la cuenta, contacto y oportunidad comercial.",
+        companyId: company.id,
+        contactId: contact.id,
+        leadId: lead.id,
+        opportunityId: opportunity.id
+      }
+    }),
+    prisma.activityLog.upsert({
+      where: { id: "seed-activity-urbania-sale" },
+      update: {},
+      create: {
+        id: "seed-activity-urbania-sale",
+        action: "CONVERTED",
+        entityType: "Sale",
+        entityId: sale.id,
+        title: "Cotizacion aceptada y venta creada",
+        body: "La venta queda lista para apertura operativa de proyecto.",
+        companyId: company.id,
+        contactId: contact.id,
+        opportunityId: opportunity.id,
+        quoteId: quote.id,
+        saleId: sale.id,
+        projectId: project.id
+      }
+    })
+  ]);
 
   await prisma.botUnansweredQuestion.upsert({
     where: { question: "Que incluye una calibracion de estacion total?" },

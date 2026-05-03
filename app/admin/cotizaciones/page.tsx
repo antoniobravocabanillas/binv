@@ -15,15 +15,22 @@ export const revalidate = 0;
 
 export default async function AdminQuotesPage() {
   await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
-  const [quotes, sellers, products, leads] = await Promise.all([
+  const [quotes, sellers, products, leads, opportunities] = await Promise.all([
     prisma.quote.findMany({
-      include: { sellerProfile: true, items: true, lead: true },
+      where: { deletedAt: null },
+      include: { sellerProfile: true, items: true, lead: true, companyRef: true, contact: true, opportunity: true, sale: true },
       orderBy: { createdAt: "desc" },
       take: 100
     }),
     prisma.staffProfile.findMany({ where: { department: "SALES", active: true }, orderBy: { displayName: "asc" } }),
     prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, take: 120 }),
-    prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 80 })
+    prisma.lead.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 80 }),
+    prisma.opportunity.findMany({
+      where: { deletedAt: null, status: { in: ["OPEN", "DISCOVERY", "PROPOSAL", "NEGOTIATION"] } },
+      include: { company: true },
+      orderBy: { createdAt: "desc" },
+      take: 80
+    })
   ]);
 
   return (
@@ -51,6 +58,12 @@ export default async function AdminQuotesPage() {
             <select name="leadId" className="h-11 rounded-md border bg-background px-3 text-sm">
               <option value="">Lead relacionado</option>
               {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.name} - {lead.company || lead.email}</option>)}
+            </select>
+            <select name="opportunityId" className="h-11 rounded-md border bg-background px-3 text-sm">
+              <option value="">Oportunidad relacionada</option>
+              {opportunities.map((opportunity) => (
+                <option key={opportunity.id} value={opportunity.id}>{opportunity.code} - {opportunity.company.tradeName || opportunity.company.legalName}</option>
+              ))}
             </select>
             <Input name="validUntil" type="date" />
             <select name="productId" className="h-11 rounded-md border bg-background px-3 text-sm">
@@ -82,6 +95,7 @@ export default async function AdminQuotesPage() {
                 <tr>
                   <th className="p-3">Numero</th>
                   <th className="p-3">Cliente</th>
+                  <th className="p-3">Oportunidad / venta</th>
                   <th className="p-3">Vendedor</th>
                   <th className="p-3">Items</th>
                   <th className="p-3">Total</th>
@@ -95,7 +109,11 @@ export default async function AdminQuotesPage() {
                     <td className="p-3 font-semibold">{quote.number}</td>
                     <td className="p-3">
                       <div>{quote.customerName}</div>
-                      <div className="text-xs text-muted-foreground">{quote.company || quote.customerEmail || "-"}</div>
+                      <div className="text-xs text-muted-foreground">{quote.companyRef?.tradeName || quote.companyRef?.legalName || quote.company || quote.customerEmail || "-"}</div>
+                    </td>
+                    <td className="p-3">
+                      <div>{quote.opportunity?.code || "Sin oportunidad"}</div>
+                      <div className="text-xs text-muted-foreground">{quote.sale?.number ? `Venta ${quote.sale.number}` : "Venta pendiente"}</div>
                     </td>
                     <td className="p-3">{quote.sellerProfile?.displayName || "-"}</td>
                     <td className="p-3">{quote.items.map((item) => item.description).join(", ")}</td>
@@ -115,7 +133,7 @@ export default async function AdminQuotesPage() {
                     </td>
                   </tr>
                 ))}
-                {!quotes.length ? <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Todavia no hay cotizaciones.</td></tr> : null}
+                {!quotes.length ? <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Todavia no hay cotizaciones.</td></tr> : null}
               </tbody>
             </table>
           </div>

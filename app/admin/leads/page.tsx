@@ -2,20 +2,22 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
-import { createLeadNoteAction, deleteLeadAction, updateLeadPipelineAction } from "@/lib/server/admin-actions";
+import { convertLeadToOpportunityAction, createLeadNoteAction, deleteLeadAction, updateLeadPipelineAction } from "@/lib/server/admin-actions";
 import { requireAdminPage } from "@/lib/server/admin-page-auth";
 
 const leadStatuses = ["NEW", "CONTACTED", "QUALIFIED", "EVALUATION", "QUOTED", "NEGOTIATION", "WON", "LOST", "REQUIRES_TECH_SUPPORT"] as const;
 const leadPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
 export default async function AdminLeadsPage() {
-  await requireAdminPage(["SALES", "ADMIN"]);
+  await requireAdminPage(["SALES", "ADMIN", "SUPER_ADMIN", "COMMERCIAL_ADMIN"]);
   const [leads, sellers] = await Promise.all([
     prisma.lead.findMany({
+      where: { deletedAt: null },
       include: {
         assignedProfile: true,
         notes: { orderBy: { createdAt: "desc" }, take: 3 },
-        quotes: true
+        quotes: true,
+        opportunity: true
       },
     orderBy: { createdAt: "desc" },
     take: 100
@@ -55,6 +57,7 @@ export default async function AdminLeadsPage() {
                   const statusAction = updateLeadPipelineAction.bind(null, lead.id);
                   const noteAction = createLeadNoteAction.bind(null, lead.id);
                   const deleteAction = deleteLeadAction.bind(null, lead.id);
+                  const convertAction = convertLeadToOpportunityAction.bind(null, lead.id);
                   return (
                     <tr key={lead.id} className="border-t align-top">
                       <td className="p-3 text-muted-foreground">{lead.createdAt.toLocaleString("es-PE")}</td>
@@ -103,8 +106,15 @@ export default async function AdminLeadsPage() {
                           <Button type="submit" size="sm" variant="outline">Agregar nota</Button>
                         </form>
                         <form action={deleteAction}>
-                          <Button type="submit" size="sm" variant="destructive">Eliminar</Button>
+                          <Button type="submit" size="sm" variant="destructive">Archivar</Button>
                         </form>
+                        {lead.opportunity ? (
+                          <Button size="sm" variant="outline" disabled>Oportunidad creada</Button>
+                        ) : (
+                          <form action={convertAction}>
+                            <Button type="submit" size="sm">Convertir a oportunidad</Button>
+                          </form>
+                        )}
                       </td>
                     </tr>
                   );
