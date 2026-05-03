@@ -66,13 +66,19 @@ export default async function AccountPage() {
                     <p className="mt-1 font-display text-2xl font-bold">{session.user.role}</p>
                   </div>
                   <div className="grid gap-3">
-                    <Button asChild size="lg">
-                      <Link href={session.user.role === "CUSTOMER" ? "/portal" : "/admin"}>
-                        {session.user.role === "CUSTOMER" ? "Ir al portal" : "Ir al panel"}
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <SignOutButton className="h-11 w-full justify-center border-destructive/30 text-destructive hover:bg-destructive/10" />
+                  <Button asChild size="lg">
+                    <Link href={session.user.role === "CUSTOMER" ? "/portal" : "/admin"}>
+                      {session.user.role === "CUSTOMER" ? "Ir al portal" : "Ir al panel"}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button asChild size="lg" variant="outline">
+                    <Link href="/registro">
+                      Registrar cliente
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <SignOutButton className="h-11 w-full justify-center border-destructive/30 text-destructive hover:bg-destructive/10" />
                   </div>
                 </CardContent>
               </Card>

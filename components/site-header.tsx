@@ -74,7 +74,7 @@ export function SiteHeader() {
         </div>
         <div className="grid gap-2 border-t p-4 sm:grid-cols-3">
           <Button asChild>
-            <Link href="/cuenta#registro-cliente" onClick={() => setMenuOpen(false)}>
+            <Link href="/registro" onClick={() => setMenuOpen(false)}>
               <UserRound className="h-4 w-4" />
               Cuenta / registro
             </Link>
@@ -117,7 +117,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <CartNavButton />
           <Link
-            href="/cuenta#registro-cliente"
+            href="/registro"
             className="hidden items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted/70 hover:text-foreground lg:inline-flex"
           >
             <UserRound className="h-4 w-4" />
