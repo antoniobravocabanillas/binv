@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -19,11 +19,13 @@ import {
   Landmark,
   LockKeyhole,
   LogIn,
+  Menu,
   PieChart,
   Search,
   ShieldCheck,
   Upload,
-  UserRoundCheck
+  UserRoundCheck,
+  X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,16 @@ type View =
 
 type RiskLevel = "Conservador" | "Moderado" | "Alto" | "Profesional" | "Institucional";
 type DealStatus = "Abierta" | "En análisis" | "Próximamente" | "Solo clientes calificados" | "Cerrada" | "En estructuración" | "Derivada a aliado";
+type UserRole = "Cliente inversionista" | "Empresa solicitante" | "Asesor" | "Admin BINV" | "Aliado externo";
+type KycState = "Aprobado" | "En revisión" | "Pendiente";
+
+type DemoUser = {
+  name: string;
+  role: UserRole;
+  kyc: KycState;
+  kyb: KycState;
+  profile: "Público" | "Calificado" | "Institucional";
+};
 
 type Partner = {
   name: string;
@@ -112,7 +124,7 @@ const countryConfig: Record<CountryCode, {
 }> = {
   PE: {
     label: "Perú",
-    flag: "PE",
+    flag: "🇵🇪",
     baseCurrency: "USD",
     secondaryCurrency: "PEN",
     context: "Perú, nuam, Bolsa de Lima y oportunidades regionales con foco patrimonial high-ticket.",
@@ -124,7 +136,7 @@ const countryConfig: Record<CountryCode, {
   },
   AR: {
     label: "Argentina",
-    flag: "AR",
+    flag: "🇦🇷",
     baseCurrency: "USD",
     secondaryCurrency: "ARS",
     context: "Argentina, BYMA, MAE/A3 Mercados, ALyCs aliadas y acceso internacional según perfil.",
@@ -485,6 +497,29 @@ const portfolioByCountry: Record<CountryCode, PortfolioPosition[]> = {
   ]
 };
 
+const demoUsers: DemoUser[] = [
+  { name: "Cliente patrimonial", role: "Cliente inversionista", kyc: "Aprobado", kyb: "Pendiente", profile: "Calificado" },
+  { name: "Empresa solicitante", role: "Empresa solicitante", kyc: "En revisión", kyb: "En revisión", profile: "Público" },
+  { name: "Asesor BINV", role: "Asesor", kyc: "Aprobado", kyb: "Aprobado", profile: "Institucional" },
+  { name: "Admin BINV", role: "Admin BINV", kyc: "Aprobado", kyb: "Aprobado", profile: "Institucional" },
+  { name: "Aliado operativo", role: "Aliado externo", kyc: "Aprobado", kyb: "Aprobado", profile: "Institucional" }
+];
+
+function canAccessDataRoom(user: DemoUser, deal: Opportunity) {
+  if (user.role === "Admin BINV" || user.role === "Asesor") return true;
+  if (deal.status === "Solo clientes calificados" || deal.status === "En estructuración") {
+    return user.kyc === "Aprobado" && user.profile !== "Público";
+  }
+  return user.kyc === "Aprobado";
+}
+
+function roleHomeView(role: UserRole): View {
+  if (role === "Empresa solicitante") return "financing";
+  if (role === "Admin BINV") return "admin";
+  if (role === "Aliado externo") return "partners";
+  return "home";
+}
+
 const assetFilters = ["Todos", "Mercado de valores", "Renta fija", "Deuda privada", "Financiamiento estructurado", "Real estate", "Fondos", "Internacional", "Liquidez", "Alternativos"];
 const riskFilters = ["Todos", "Conservador", "Moderado", "Alto", "Profesional", "Institucional"];
 const statusFilters = ["Todos", "Abierta", "En análisis", "Próximamente", "Solo clientes calificados", "Cerrada", "En estructuración", "Derivada a aliado"];
@@ -507,12 +542,12 @@ function getVisibleOpportunities(country: CountryCode) {
   return Array.from(new Map(merged.map((deal) => [deal.id, deal])).values());
 }
 
-function SectionTitle({ eyebrow, title, text }: { eyebrow?: string; title: string; text?: string }) {
+function SectionTitle({ eyebrow, title, text, tone = "light" }: { eyebrow?: string; title: string; text?: string; tone?: "light" | "dark" }) {
   return (
     <div className="max-w-3xl">
       {eyebrow ? <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#9C7A3E]">{eyebrow}</p> : null}
-      <h2 className="mt-2 text-3xl font-bold text-[#0B1020] md:text-4xl">{title}</h2>
-      {text ? <p className="mt-3 text-sm leading-7 text-[#475467] md:text-base">{text}</p> : null}
+      <h2 className={cn("mt-2 text-3xl font-bold md:text-4xl", tone === "dark" ? "text-white" : "text-[#0B1020]")}>{title}</h2>
+      {text ? <p className={cn("mt-3 text-sm leading-7 md:text-base", tone === "dark" ? "text-[#C9D2DF]" : "text-[#475467]")}>{text}</p> : null}
     </div>
   );
 }
@@ -622,7 +657,7 @@ function OpportunityTable({ opportunities, onDeal }: { opportunities: Opportunit
   );
 }
 
-function PublicLanding({ onAccess }: { onAccess: () => void }) {
+function PublicLanding({ onAccess }: { onAccess: (user: DemoUser) => void }) {
   const [country, setCountry] = useState<CountryCode>("PE");
   const [showLogin, setShowLogin] = useState(false);
 
@@ -636,16 +671,16 @@ function PublicLanding({ onAccess }: { onAccess: () => void }) {
     window.localStorage.setItem("binv-country", next);
   }
 
-  function enterPrivateExperience() {
+  function enterPrivateExperience(user: DemoUser) {
     window.localStorage.setItem("binv-country", country);
-    onAccess();
+    onAccess(user);
   }
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#07111F] text-[#FCFAF7]">
       <PublicHeader country={country} onCountryChange={changeCountry} onAccess={() => setShowLogin(true)} />
       <main>
-        <section className="hero-luxury relative min-h-[980px] overflow-hidden px-4 pb-36 pt-28 md:min-h-screen md:px-8 md:pb-24 md:pt-32 lg:px-12">
+        <section id="inicio" className="hero-luxury relative min-h-[980px] overflow-hidden px-4 pb-36 pt-28 md:min-h-screen md:px-8 md:pb-24 md:pt-32 lg:px-12">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(191,164,106,0.16),transparent_34%),radial-gradient(circle_at_82%_28%,rgba(156,122,62,0.13),transparent_34%),radial-gradient(circle_at_66%_72%,rgba(26,42,67,0.54),transparent_38%),linear-gradient(180deg,#050D19_0%,#07111F_48%,#0B1728_100%)]" />
           <HeroCapitalNetwork country={country} />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,13,25,0.98)_0%,rgba(5,13,25,0.90)_34%,rgba(5,13,25,0.50)_66%,rgba(5,13,25,0.70)_100%)]" />
@@ -691,8 +726,10 @@ function PublicLanding({ onAccess }: { onAccess: () => void }) {
           <PublicPillars country={country} />
           <EcosystemSection country={country} />
           <FeaturedOpportunities country={country} onAccess={() => setShowLogin(true)} />
+          <PublicFinancingSection country={country} onAccess={() => setShowLogin(true)} />
           <ProcessSection />
           <UrbaniaShowcase onAccess={() => setShowLogin(true)} />
+          <PublicInvestorRelationsSection onAccess={() => setShowLogin(true)} />
           <ComplianceSection country={country} />
           <FinalCTA onAccess={() => setShowLogin(true)} />
         </div>
@@ -703,6 +740,15 @@ function PublicLanding({ onAccess }: { onAccess: () => void }) {
 }
 
 function PublicHeader({ country, onCountryChange, onAccess }: { country: CountryCode; onCountryChange: (country: CountryCode) => void; onAccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const navItems = [
+    { label: "Inicio", href: "#inicio" },
+    { label: "Inversiones", href: "#inversiones" },
+    { label: "Financiamiento", href: "#financiamiento" },
+    { label: "Urbania Capital", href: "#urbania-capital" },
+    { label: "Ecosistema", href: "#ecosistema" },
+    { label: "Rel. Inversionistas", href: "#relacion-inversionistas" }
+  ];
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-6">
       <div className="mx-auto grid w-full max-w-[1360px] grid-cols-[auto_auto] items-center justify-between gap-3 rounded-sm border border-white/[0.075] bg-[#050D19]/[0.58] px-3 py-3.5 shadow-[0_24px_80px_-62px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-2xl md:px-6 lg:grid-cols-[auto_1fr_auto]">
@@ -712,16 +758,34 @@ function PublicHeader({ country, onCountryChange, onAccess }: { country: Country
           </span>
         </div>
         <nav className="hidden min-w-0 items-center justify-center gap-7 text-[13px] font-semibold text-[#A8B2C2] lg:flex">
-          {["Inicio", "Inversiones", "Financiamiento", "Urbania Capital", "Ecosistema", "Relación con Inversionistas"].map((item) => <a key={item} href={`#${item.toLowerCase().replaceAll(" ", "-")}`} className="transition duration-300 hover:text-[#E3CF9C]">{item}</a>)}
+          {navItems.map((item) => <a key={item.href} href={item.href} className="transition duration-300 hover:text-[#E3CF9C]">{item.label}</a>)}
         </nav>
         <div className="hidden shrink-0 items-center justify-end gap-2 sm:flex">
           <CountrySelector country={country} onChange={onCountryChange} />
           <Button size="sm" variant="secondary" className="private-bank-button private-bank-button-gold hidden min-h-9 px-5 py-2 text-sm sm:inline-flex" onClick={onAccess}>Acceso</Button>
         </div>
+        <button className="fixed right-5 top-7 z-[95] grid h-10 w-10 place-items-center rounded-sm border border-[#BFA46A]/40 bg-[#BFA46A] text-[#07111F] shadow-[0_16px_44px_-30px_rgba(191,164,106,0.9)] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir navegación">
+          <Menu className="h-5 w-5" />
+        </button>
       </div>
-      <div className="sm:hidden" style={{ position: "fixed", right: 18, top: 28, zIndex: 1000 }}>
-        <CountrySelector country={country} onChange={onCountryChange} />
-      </div>
+      {open ? (
+        <div className="fixed inset-0 z-[90] bg-[#050D19]/92 p-4 backdrop-blur-xl lg:hidden">
+          <div className="rounded-sm border border-white/[0.10] bg-[#07111F] p-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <Image src="/images/binv/logo-white.png" alt="BINV Capital" width={132} height={40} className="h-8 w-auto object-contain" />
+              <button className="grid h-10 w-10 place-items-center rounded-sm border border-white/[0.12] text-white" onClick={() => setOpen(false)} aria-label="Cerrar navegación"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="mt-5 flex items-center justify-between gap-3 rounded-sm border border-[#BFA46A]/20 bg-white/[0.04] p-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#A8B2C2]">Mercado</span>
+              <CountrySelector country={country} onChange={onCountryChange} />
+            </div>
+            <nav className="mt-5 grid gap-2">
+              {navItems.map((item) => <a key={item.href} href={item.href} onClick={() => setOpen(false)} className="rounded-sm border border-white/[0.08] bg-white/[0.035] px-4 py-3 text-sm font-semibold text-[#FCFAF7]">{item.label}</a>)}
+            </nav>
+            <Button className="mt-5 w-full" variant="secondary" onClick={() => { setOpen(false); onAccess(); }}>Acceso privado</Button>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -1028,13 +1092,57 @@ function FeaturedOpportunities({ country, onAccess }: { country: CountryCode; on
   return <section className="landing-ecosystem bg-[#F4EFE7] px-4 py-24 md:px-8 lg:px-12"><div className="mx-auto max-w-[1240px]"><SectionTitle eyebrow="Oportunidades destacadas" title="Vista pública, sin información sensible." text="El acceso completo a data rooms depende de perfil, KYC/KYB y documentación." /><div className="mt-10 grid gap-5 lg:grid-cols-3">{featured.map((deal) => <Card key={deal.id} className="rounded-md border-[#DED6C7] bg-[#FCFAF7]"><CardHeader><PartnerBadge partner={deal.operatingPartner} /><CardTitle>{deal.name}</CardTitle><CardDescription>{deal.summary}</CardDescription></CardHeader><CardContent className="space-y-3"><InfoPill label="Activo" value={deal.assetType} /><InfoPill label="País" value={deal.country} /><Button className="w-full" onClick={onAccess}>Solicitar acceso</Button></CardContent></Card>)}</div></div></section>;
 }
 
+function PublicFinancingSection({ country, onAccess }: { country: CountryCode; onAccess: () => void }) {
+  const config = countryConfig[country];
+  const instruments = financingInstrumentsByCountry[country].slice(0, 6);
+  return (
+    <section id="financiamiento" className="landing-ecosystem bg-[#FCFAF7] px-4 py-24 md:px-8 lg:px-12">
+      <div className="mx-auto grid max-w-[1240px] gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
+        <div>
+          <SectionTitle eyebrow="Financiamiento empresarial" title="Originación y estructuración para compañías que buscan capital." text={config.financingIntro} />
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button variant="secondary" className="private-bank-button private-bank-button-gold" onClick={onAccess}>Iniciar evaluación</Button>
+            <Button variant="outline" onClick={onAccess}>Hablar con un asesor</Button>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {instruments.map((item) => (
+            <div key={item} className="rounded-md border border-[#DED6C7] bg-[#F4EFE7] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9C7A3E]">{countryConfig[country].label}</p>
+              <p className="mt-3 text-sm font-bold text-[#07111F]">{item}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ProcessSection() {
   const steps = ["Diagnóstico", "Perfilamiento", "Validación KYC/KYB", "Acceso a oportunidades", "Derivación a aliado", "Seguimiento informativo"];
   return <section className="landing-ecosystem bg-[#FCFAF7] px-4 py-24 md:px-8 lg:px-12"><div className="mx-auto max-w-[1240px]"><SectionTitle eyebrow="Proceso" title="Una ruta institucional antes de acceder a oportunidades." /><div className="mt-10 grid gap-3 md:grid-cols-3 lg:grid-cols-6">{steps.map((step, index) => <div key={step} className="rounded-md border border-[#DED6C7] bg-[#F4EFE7] p-4"><p className="text-sm font-bold text-[#9C7A3E]">0{index + 1}</p><p className="mt-3 text-sm font-semibold text-[#0B1020]">{step}</p></div>)}</div></div></section>;
 }
 
 function UrbaniaShowcase({ onAccess }: { onAccess: () => void }) {
-  return <section id="urbania-capital" className="landing-ecosystem bg-[#07111F] px-4 py-24 text-white md:px-8 lg:px-12"><div className="mx-auto grid max-w-[1240px] gap-12 lg:grid-cols-[0.9fr_1.1fr]"><div><SectionTitle eyebrow="Urbania Capital" title="Real estate con lógica institucional." text="Urbania Capital integra activos inmobiliarios, estructura legal y seguimiento de proyectos para clientes que buscan exposición a real estate con una lógica más institucional." /><p className="mt-5 text-sm leading-7 text-[#A8B2C2]">Los proyectos se ejecutan principalmente en Perú y pueden estar disponibles para clientes de Perú y Argentina según perfil, documentación y condiciones aplicables.</p><Button className="mt-9 rounded-sm shadow-[0_18px_55px_-32px_rgba(191,164,106,0.9)]" variant="secondary" onClick={onAccess}>Solicitar evaluación privada</Button></div><div className="grid gap-4 md:grid-cols-3">{urbaniaProjects.map((project) => <div key={project.name} className="rounded-md border border-[#BFA46A]/18 bg-white/[0.055] p-4"><p className="text-sm font-bold text-white">{project.name}</p><p className="mt-2 text-xs text-[#A8B2C2]">{project.location}</p><p className="mt-4 text-xs text-[#BFA46A]">{project.structure}</p></div>)}</div></div></section>;
+  return <section id="urbania-capital" className="landing-ecosystem bg-[#07111F] px-4 py-24 text-white md:px-8 lg:px-12"><div className="mx-auto grid max-w-[1240px] gap-12 lg:grid-cols-[0.9fr_1.1fr]"><div><SectionTitle tone="dark" eyebrow="Urbania Capital" title="Real estate con lógica institucional." text="Urbania Capital integra activos inmobiliarios, estructura legal y seguimiento de proyectos para clientes que buscan exposición a real estate con una lógica más institucional." /><p className="mt-5 text-sm leading-7 text-[#A8B2C2]">Los proyectos se ejecutan principalmente en Perú y pueden estar disponibles para clientes de Perú y Argentina según perfil, documentación y condiciones aplicables.</p><Button className="mt-9 rounded-sm shadow-[0_18px_55px_-32px_rgba(191,164,106,0.9)]" variant="secondary" onClick={onAccess}>Solicitar evaluación privada</Button></div><div className="grid gap-4 md:grid-cols-3">{urbaniaProjects.map((project) => <div key={project.name} className="rounded-md border border-[#BFA46A]/18 bg-white/[0.055] p-4"><Badge variant="outline" className="border-[#BFA46A]/30 bg-[#BFA46A]/10 text-[#E3CF9C]">Ejecutado en Perú</Badge><p className="mt-4 text-sm font-bold text-white">{project.name}</p><p className="mt-2 text-xs text-[#A8B2C2]">{project.location}</p><p className="mt-4 text-xs text-[#BFA46A]">{project.structure}</p></div>)}</div></div></section>;
+}
+
+function PublicInvestorRelationsSection({ onAccess }: { onAccess: () => void }) {
+  return (
+    <section id="relacion-inversionistas" className="landing-ecosystem bg-[#F4EFE7] px-4 py-24 md:px-8 lg:px-12">
+      <div className="mx-auto grid max-w-[1240px] gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+        <SectionTitle eyebrow="Relación con Inversionistas" title="Reportes, comunicados y documentación institucional en un entorno privado." text="La información sensible se organiza por país, perfil, estado KYC/KYB y permisos de acceso." />
+        <div className="grid gap-4 md:grid-cols-3">
+          {["Reportes", "Comunicados", "Documentos legales"].map((item) => (
+            <Card key={item} className="rounded-md border-[#DED6C7] bg-[#FCFAF7]">
+              <CardHeader><FileText className="h-5 w-5 text-[#9C7A3E]" /><CardTitle>{item}</CardTitle><CardDescription>Acceso según perfil y país activo.</CardDescription></CardHeader>
+            </Card>
+          ))}
+        </div>
+        <Button className="w-fit" variant="secondary" onClick={onAccess}>Solicitar acceso institucional</Button>
+      </div>
+    </section>
+  );
 }
 
 function ComplianceSection({ country }: { country: CountryCode }) {
@@ -1042,26 +1150,47 @@ function ComplianceSection({ country }: { country: CountryCode }) {
 }
 
 function FinalCTA({ onAccess }: { onAccess: () => void }) {
-  return <section className="landing-ecosystem bg-[#FCFAF7] px-4 py-24 md:px-8 lg:px-12"><div className="mx-auto max-w-4xl rounded-md border border-[#DED6C7] bg-[#07111F] p-12 text-center text-white shadow-[0_32px_100px_-70px_rgba(11,16,32,0.95)]"><p className="text-sm uppercase tracking-[0.22em] text-[#BFA46A]">Evaluación privada</p><h2 className="mt-5 text-3xl font-bold md:text-5xl">No todos los clientes necesitan más productos. Algunos necesitan mejor estructura.</h2><Button className="mt-10 rounded-sm shadow-[0_18px_55px_-32px_rgba(191,164,106,0.9)]" variant="secondary" size="lg" onClick={onAccess}>Solicitar evaluación privada</Button></div></section>;
+  return <section className="landing-ecosystem bg-[#FCFAF7] px-4 py-24 md:px-8 lg:px-12"><div className="mx-auto max-w-4xl rounded-md border border-[#DED6C7] bg-[#07111F] p-8 text-center text-white shadow-[0_32px_100px_-70px_rgba(11,16,32,0.95)] md:p-12"><p className="text-sm uppercase tracking-[0.22em] text-[#BFA46A]">Evaluación privada</p><h2 className="mt-5 text-3xl font-bold md:text-5xl">No todos los clientes necesitan más productos. Algunos necesitan mejor estructura.</h2><Button className="mt-10 rounded-sm shadow-[0_18px_55px_-32px_rgba(191,164,106,0.9)]" variant="secondary" size="lg" onClick={onAccess}>Solicitar evaluación privada</Button></div></section>;
 }
 
-function LoginModal({ onClose, onAccess }: { onClose: () => void; onAccess: () => void }) {
-  return <div className="fixed inset-0 z-[80] grid place-items-center bg-[#07111F]/80 p-4 backdrop-blur"><div className="w-full max-w-md rounded-md border border-[#DED6C7] bg-[#FCFAF7] p-6 shadow-[0_30px_90px_-50px_rgba(0,0,0,0.8)]"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-bold text-[#0B1020]">Acceso privado</h2><p className="mt-2 text-sm leading-6 text-[#475467]">Ingresa a la experiencia privada de plataforma. Para esta versión puedes acceder con perfil demo.</p></div><button onClick={onClose} className="rounded-md border px-2 py-1 text-sm">Cerrar</button></div><div className="mt-6 space-y-3"><Input placeholder="Email corporativo" /><Input type="password" placeholder="Contraseña" /><Button className="w-full" onClick={onAccess}>Entrar como cliente demo</Button><Button className="w-full" variant="outline" onClick={onAccess}>Entrar como admin demo</Button></div></div></div>;
+function LoginModal({ onClose, onAccess }: { onClose: () => void; onAccess: (user: DemoUser) => void }) {
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-[#07111F]/80 p-4 backdrop-blur">
+      <div className="w-full max-w-2xl rounded-md border border-[#DED6C7] bg-[#FCFAF7] p-6 shadow-[0_30px_90px_-50px_rgba(0,0,0,0.8)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-[#0B1020]">Acceso privado</h2>
+            <p className="mt-2 text-sm leading-6 text-[#475467]">Selecciona un perfil demo. Cada rol activa una experiencia, permisos y estado KYC/KYB distintos.</p>
+          </div>
+          <button onClick={onClose} className="rounded-md border border-[#DED6C7] px-2 py-1 text-sm">Cerrar</button>
+        </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          {demoUsers.map((user) => (
+            <button key={user.role} onClick={() => onAccess(user)} className="rounded-md border border-[#DED6C7] bg-[#F4EFE7] p-4 text-left transition hover:border-[#BFA46A] hover:bg-[#FCFAF7]">
+              <p className="text-sm font-bold text-[#07111F]">{user.name}</p>
+              <p className="mt-1 text-xs text-[#667085]">{user.role} · KYC {user.kyc} · {user.profile}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function BinvCapitalPlatform() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<DemoUser | null>(null);
 
-  if (!isAuthenticated) {
-    return <PublicLanding onAccess={() => setIsAuthenticated(true)} />;
+  if (!user) {
+    return <PublicLanding onAccess={setUser} />;
   }
 
-  return <PrivatePlatform />;
+  return <PrivatePlatform user={user} onLogout={() => setUser(null)} />;
 }
 
-function PrivatePlatform() {
+function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => void }) {
   const [country, setCountry] = useState<CountryCode>("PE");
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>(roleHomeView(user.role));
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<Opportunity>(getVisibleOpportunities("PE")[0]);
   const [asset, setAsset] = useState("Todos");
   const [partner, setPartner] = useState("Todos");
@@ -1127,11 +1256,20 @@ function PrivatePlatform() {
     legal: "Legal / Disclaimers",
     faq: "FAQ"
   };
+  const visibleNavGroups = navGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => user.role === "Admin BINV" || item.id !== "admin")
+  })).filter((group) => group.items.length > 0);
+
+  function navigate(next: View) {
+    setView(next);
+    setMobileNavOpen(false);
+  }
 
   return (
     <div className="min-h-screen bg-[#F4EFE7] text-[#0B1020]">
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-[236px] flex-col border-r border-[#BFA46A]/20 bg-[#07111F] lg:flex">
-        <button onClick={() => setView("home")} className="border-b border-[#BFA46A]/20 px-4 py-5 text-left">
+        <button onClick={() => navigate("home")} className="border-b border-[#BFA46A]/20 px-4 py-5 text-left">
           <span className="grid h-12 w-[168px] place-items-center overflow-hidden rounded-md border border-white/10 bg-[#0B1322] px-3 shadow-[0_12px_34px_-22px_rgba(191,164,106,0.55)]">
             <Image src="/images/binv/logo-white.png" alt="BINV Capital" width={172} height={48} className="h-8 w-auto object-contain" priority />
           </span>
@@ -1142,11 +1280,11 @@ function PrivatePlatform() {
           <CountrySelector country={country} onChange={changeCountry} />
         </div>
         <nav className="flex-1 overflow-y-auto py-3">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div key={group.label} className="mb-3">
               <p className="px-4 pb-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#667085]">{group.label}</p>
               {group.items.map(({ id, label, icon: Icon }) => (
-                <button key={id} onClick={() => setView(id)} className={cn("flex w-full items-center gap-2 border-l-2 border-transparent px-4 py-2 text-left text-xs font-semibold text-[#9AA6B8] transition hover:bg-[#BFA46A]/[0.08] hover:text-[#F4EFE7]", view === id && "border-[#BFA46A] bg-[#BFA46A]/[0.12] text-[#E3CF9C]")}>
+                <button key={id} onClick={() => navigate(id)} className={cn("flex w-full items-center gap-2 border-l-2 border-transparent px-4 py-2 text-left text-xs font-semibold text-[#9AA6B8] transition hover:bg-[#BFA46A]/[0.08] hover:text-[#F4EFE7]", view === id && "border-[#BFA46A] bg-[#BFA46A]/[0.12] text-[#E3CF9C]")}>
                   <Icon className="h-4 w-4" />{label}
                 </button>
               ))}
@@ -1155,7 +1293,7 @@ function PrivatePlatform() {
         </nav>
         <div className="border-t border-[#BFA46A]/20 p-4">
           <div className="rounded-md border border-[#027A48]/35 bg-[#027A48]/12 px-3 py-2 text-xs font-semibold text-emerald-300">
-            KYC aprobado · perfil calificado
+            {user.kyc === "Aprobado" ? "KYC aprobado" : `KYC ${user.kyc}`} · {user.profile}
           </div>
         </div>
       </aside>
@@ -1163,21 +1301,52 @@ function PrivatePlatform() {
       <div className="lg:ml-[236px]">
         <header className="sticky top-0 z-40 border-b border-[#DED6C7] bg-[#FCFAF7]/95 shadow-[0_18px_46px_-38px_rgba(11,16,32,0.55)] backdrop-blur">
           <div className="flex items-center justify-between gap-3 px-4 py-4 lg:px-6">
-            <div>
+            <div className="min-w-0">
+              <button className="mb-2 inline-flex items-center gap-2 rounded-sm border border-[#DED6C7] bg-white px-2 py-1 text-xs font-semibold text-[#07111F] lg:hidden" onClick={() => setMobileNavOpen(true)}><Menu className="h-4 w-4" /> Menú</button>
               <p className="text-base font-semibold text-[#0B1020]">{pageTitles[view]}</p>
               <p className="text-[11px] text-[#667085]">{countryConfig[country].context}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="hidden rounded-full border border-[#BFA46A]/40 bg-[#F4EFE7] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A6032] md:inline-flex">{countryConfig[country].label} · {countryConfig[country].baseCurrency}</span>
               <div className="lg:hidden"><CountrySelector country={country} onChange={changeCountry} /></div>
-              <Button size="sm" variant="secondary" onClick={() => setView("login")}><LogIn className="h-4 w-4" />Acceso</Button>
+              <Button size="sm" variant="secondary" onClick={() => navigate("profile")}><LogIn className="h-4 w-4" />{user.role}</Button>
             </div>
           </div>
         </header>
 
+        {mobileNavOpen ? (
+          <div className="fixed inset-0 z-[70] bg-[#07111F]/88 p-4 backdrop-blur-xl lg:hidden">
+            <div className="max-h-[92vh] overflow-y-auto rounded-md border border-[#DED6C7]/20 bg-[#FCFAF7] p-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-[#07111F]">{user.name}</p>
+                  <p className="text-xs text-[#667085]">{user.role} · KYC {user.kyc}</p>
+                </div>
+                <button className="grid h-10 w-10 place-items-center rounded-sm border" onClick={() => setMobileNavOpen(false)} aria-label="Cerrar menú"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="mt-4"><CountrySelector country={country} onChange={changeCountry} /></div>
+              <nav className="mt-5 grid gap-4">
+                {visibleNavGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#9C7A3E]">{group.label}</p>
+                    <div className="grid gap-2">
+                      {group.items.map(({ id, label, icon: Icon }) => (
+                        <button key={id} onClick={() => navigate(id)} className={cn("flex items-center gap-2 rounded-sm border border-[#DED6C7] bg-[#F4EFE7] px-3 py-3 text-left text-sm font-semibold", view === id && "border-[#BFA46A] bg-[#07111F] text-white")}>
+                          <Icon className="h-4 w-4" />{label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+              <Button className="mt-5 w-full" variant="outline" onClick={onLogout}>Salir del demo</Button>
+            </div>
+          </div>
+        ) : null}
+
         <main className="mx-auto max-w-[1360px] space-y-6 px-4 py-7 lg:px-8">
-          {view === "home" && <Home country={country} setView={setView} />}
-          {view === "dashboard" && <Dashboard country={country} />}
+          {view === "home" && <Home country={country} user={user} setView={navigate} />}
+          {view === "dashboard" && <Dashboard country={country} user={user} />}
           {view === "investments" && (
             <InvestmentHub
               opportunities={visibleOpportunities}
@@ -1190,15 +1359,15 @@ function PrivatePlatform() {
               }}
             />
           )}
-          {view === "deal" && <DealRoom country={country} deal={selectedDeal} />}
+          {view === "deal" && <DealRoom country={country} deal={selectedDeal} user={user} />}
           {view === "portfolio" && <Portfolio country={country} />}
           {view === "urbania" && <Urbania country={country} />}
-          {view === "financing" && <FinancingHub country={country} />}
+          {view === "financing" && <FinancingHub country={country} user={user} />}
           {view === "investors" && <InvestorRelations country={country} />}
           {view === "admin" && <AdminPanel country={country} />}
           {view === "login" && <Login />}
-          {view === "profile" && <Profile country={country} />}
-          {view === "kyc" && <Kyc country={country} />}
+          {view === "profile" && <Profile country={country} user={user} onLogout={onLogout} />}
+          {view === "kyc" && <Kyc country={country} user={user} />}
           {view === "partners" && <Partners country={country} />}
           {view === "legal" && <Legal country={country} />}
           {view === "faq" && <Faq country={country} />}
@@ -1208,7 +1377,7 @@ function PrivatePlatform() {
   );
 }
 
-function Home({ country, setView }: { country: CountryCode; setView: (view: View) => void }) {
+function Home({ country, user, setView }: { country: CountryCode; user: DemoUser; setView: (view: View) => void }) {
   const config = countryConfig[country];
   return (
     <>
@@ -1217,7 +1386,7 @@ function Home({ country, setView }: { country: CountryCode; setView: (view: View
         <div className="absolute right-[-120px] top-[-150px] h-[360px] w-[360px] rounded-full border border-[#BFA46A]/10" />
         <div className="absolute bottom-[-180px] right-[80px] h-[420px] w-[420px] rounded-full bg-[#BFA46A]/[0.035]" />
         <div className="relative max-w-4xl">
-          <Badge className="bg-[#BFA46A] text-[#07111F]">Private banking · Asset management · Mercado de capitales</Badge>
+          <Badge className="bg-[#BFA46A] text-[#07111F]">{user.role} · {user.profile} · KYC {user.kyc}</Badge>
           <h1 className="mt-6 max-w-4xl text-5xl font-bold leading-[1.02] text-white md:text-7xl">BINV Capital</h1>
           <p className="mt-5 max-w-3xl text-xl leading-8 text-white/80">
             BINV Capital conecta clientes patrimoniales, empresas e inversores calificados con oportunidades de inversión y financiamiento en Argentina y Perú, integrando mercado de capitales, real estate, deuda privada y aliados estratégicos.
@@ -1228,6 +1397,11 @@ function Home({ country, setView }: { country: CountryCode; setView: (view: View
             <Button size="lg" variant="outline" className="border-white/25 bg-white/10 text-white hover:bg-white/20" onClick={() => setView("financing")}>Buscar financiamiento</Button>
           </div>
         </div>
+      </section>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <InfoList title="Próximas acciones" items={[user.kyc === "Aprobado" ? "Puedes solicitar acceso a data rooms habilitados para tu perfil." : "Completa KYC/KYB antes de acceder a documentación sensible.", config.nextAction, user.role === "Empresa solicitante" ? "Completa la solicitud de financiamiento para prediagnóstico." : "Revisar oportunidades recomendadas por país activo."]} icon={Bell} />
+        <InfoList title="Perfil operativo" items={[`Rol: ${user.role}`, `Perfil: ${user.profile}`, `KYC: ${user.kyc}`, `KYB: ${user.kyb}`, `Mercado activo: ${config.label}`]} icon={UserRoundCheck} />
+        <InfoList title="Accesos disponibles" items={["Dashboard patrimonial informativo", "Investment Hub filtrado por país", "Deal Room con permisos", user.role === "Admin BINV" ? "Panel Admin completo" : "Panel Admin restringido"]} icon={ShieldCheck} />
       </section>
       <section className="grid gap-4 md:grid-cols-4">
         {[
@@ -1255,7 +1429,7 @@ function Home({ country, setView }: { country: CountryCode; setView: (view: View
   );
 }
 
-function Dashboard({ country }: { country: CountryCode }) {
+function Dashboard({ country, user }: { country: CountryCode; user: DemoUser }) {
   const config = countryConfig[country];
   return (
     <section className="space-y-6">
@@ -1265,7 +1439,7 @@ function Dashboard({ country }: { country: CountryCode }) {
           ["Patrimonio informativo total", "USD 1,245,000"],
           ["Rendimiento YTD informativo", "9.8%"],
           ["Próximas distribuciones", country === "PE" ? "USD 18,420" : "USD 11,820"],
-          ["KYC / KYB", "Perfil aprobado"],
+          ["KYC / KYB", `${user.kyc} / ${user.kyb}`],
           ["Perfil de riesgo", config.riskProfile],
           ["Aliado custodio principal", config.dashboardCustodian],
           ["Última actualización", "05 May 2026"],
@@ -1279,7 +1453,7 @@ function Dashboard({ country }: { country: CountryCode }) {
         <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Activos por clase</CardTitle></CardHeader><CardContent><MiniBarChart data={[{ label: "Valores", value: 42 }, { label: "Real estate", value: 24 }, { label: "Deuda", value: 18 }, { label: "Fondos", value: 10 }, { label: "Global", value: 6 }]} /></CardContent></Card>
       </div>
       <div className="grid gap-5 lg:grid-cols-3">
-        <InfoList title="Próxima acción recomendada" items={[config.nextAction, "Confirmar documentos pendientes", "Agendar revisión patrimonial con asesor BINV"]} icon={Bell} />
+        <InfoList title="Próxima acción recomendada" items={[user.kyc === "Aprobado" ? config.nextAction : "Completar validación KYC/KYB antes de acceder a data rooms.", "Confirmar documentos pendientes", "Agendar revisión patrimonial con asesor BINV"]} icon={Bell} />
         <InfoList title="Documentos pendientes" items={["Declaración fiscal actualizada", "Validación de beneficiario final", "Confirmación de custodio / plataforma"]} icon={FileCheck2} />
         <InfoList title="Asesor asignado" items={["María Torres", "wealth@binvcapital.com", "Próxima llamada: 08 May 2026"]} icon={UserRoundCheck} />
       </div>
@@ -1300,19 +1474,35 @@ function InvestmentHub({
   setters: Record<string, (value: string) => void>;
   onDeal: (deal: Opportunity) => void;
 }) {
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => key !== "query" && value !== "Todos" && value !== "Activo").length + (filters.query ? 1 : 0);
+  function clearFilters() {
+    setters.setAsset("Todos");
+    setters.setPartner("Todos");
+    setters.setRisk("Todos");
+    setters.setStatus("Todos");
+    setters.setCurrency("Todos");
+    setters.setTicket("Todos");
+    setters.setTerm("Todos");
+    setters.setCountryFilter("Activo");
+    setters.setQuery("");
+  }
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Investment Hub" title="Oportunidades seleccionadas" text="Todas las oportunidades muestran aliado operativo, rol del aliado, estado de derivación y rol de BINV." />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#DED6C7] bg-[#FCFAF7] p-4">
+        <p className="text-sm font-semibold text-[#07111F]">{opportunities.length} oportunidades visibles · {activeFilterCount} filtros activos</p>
+        <Button variant="outline" size="sm" onClick={clearFilters}>Limpiar filtros</Button>
+      </div>
       <Card className="rounded-md border-[#DED6C7]"><CardContent className="grid gap-3 p-4 lg:grid-cols-4">
-        <label className="relative lg:col-span-2"><Search className="absolute left-3 top-3 h-4 w-4 text-[#667085]" /><Input className="pl-9" value={filters.query} onChange={(event) => setters.setQuery(event.target.value)} placeholder="Buscar oportunidad, aliado, mercado o activo" /></label>
-        <FilterSelect value={filters.countryFilter} onChange={setters.setCountryFilter} items={["Activo", "Todos", "PE", "AR", "GLOBAL"]} />
-        <FilterSelect value={filters.asset} onChange={setters.setAsset} items={assetFilters} />
-        <FilterSelect value={filters.partner} onChange={setters.setPartner} items={["Todos", ...options.partnerOptions]} />
-        <FilterSelect value={filters.risk} onChange={setters.setRisk} items={riskFilters} />
-        <FilterSelect value={filters.status} onChange={setters.setStatus} items={statusFilters} />
-        <FilterSelect value={filters.currency} onChange={setters.setCurrency} items={["Todos", "USD", "PEN", "ARS"]} />
-        <FilterSelect value={filters.ticket} onChange={setters.setTicket} items={["Todos", "50k+", "100k+"]} />
-        <FilterSelect value={filters.term} onChange={setters.setTerm} items={["Todos", "Corto", "Medio / largo"]} />
+        <FormField label="Buscar" className="relative lg:col-span-2"><Search className="absolute left-3 top-[34px] h-4 w-4 text-[#667085]" /><Input className="pl-9" value={filters.query} onChange={(event) => setters.setQuery(event.target.value)} placeholder="Oportunidad, aliado, mercado o activo" /></FormField>
+        <FilterSelect label="País" value={filters.countryFilter} onChange={setters.setCountryFilter} items={["Activo", "Todos", "PE", "AR", "GLOBAL"]} />
+        <FilterSelect label="Activo" value={filters.asset} onChange={setters.setAsset} items={assetFilters} />
+        <FilterSelect label="Aliado" value={filters.partner} onChange={setters.setPartner} items={["Todos", ...options.partnerOptions]} />
+        <FilterSelect label="Riesgo" value={filters.risk} onChange={setters.setRisk} items={riskFilters} />
+        <FilterSelect label="Estado" value={filters.status} onChange={setters.setStatus} items={statusFilters} />
+        <FilterSelect label="Moneda" value={filters.currency} onChange={setters.setCurrency} items={["Todos", "USD", "PEN", "ARS"]} />
+        <FilterSelect label="Ticket" value={filters.ticket} onChange={setters.setTicket} items={["Todos", "50k+", "100k+"]} />
+        <FilterSelect label="Plazo" value={filters.term} onChange={setters.setTerm} items={["Todos", "Corto", "Medio / largo"]} />
       </CardContent></Card>
       <OpportunityTable opportunities={opportunities} onDeal={onDeal} />
       <div className="grid gap-4 lg:grid-cols-2">{opportunities.slice(0, 2).map((deal) => <DealCard key={deal.id} deal={deal} onDeal={onDeal} />)}</div>
@@ -1320,10 +1510,11 @@ function InvestmentHub({
   );
 }
 
-function FilterSelect({ value, onChange, items }: { value: string; onChange: (value: string) => void; items: string[] }) {
+function FilterSelect({ label, value, onChange, items }: { label?: string; value: string; onChange: (value: string) => void; items: string[] }) {
   return (
-    <label className="relative">
-      <Filter className="absolute left-3 top-3 h-4 w-4 text-[#667085]" />
+    <label className="relative grid gap-1.5 text-sm font-semibold text-[#344054]">
+      {label ? <span>{label}</span> : null}
+      <Filter className={cn("absolute left-3 h-4 w-4 text-[#667085]", label ? "top-[34px]" : "top-3")} />
       <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full rounded-md border bg-[#FCFAF7] pl-9 pr-3 text-sm font-semibold">
         {items.map((item) => <option key={item}>{item}</option>)}
       </select>
@@ -1331,7 +1522,8 @@ function FilterSelect({ value, onChange, items }: { value: string; onChange: (va
   );
 }
 
-function DealRoom({ country, deal }: { country: CountryCode; deal: Opportunity }) {
+function DealRoom({ country, deal, user }: { country: CountryCode; deal: Opportunity; user: DemoUser }) {
+  const hasDataRoomAccess = canAccessDataRoom(user, deal);
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Deal Room" title={deal.name} text={deal.summary} />
@@ -1341,13 +1533,13 @@ function DealRoom({ country, deal }: { country: CountryCode; deal: Opportunity }
           <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Tesis de inversión</CardTitle><CardDescription>{deal.thesis}</CardDescription></CardHeader></Card>
           <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Estructura del deal</CardTitle><CardDescription>{deal.structure}</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-3"><InfoPill label="Aliado operativo" value={deal.operatingPartner} /><InfoPill label="Rol del aliado" value={deal.partnerRole} /><InfoPill label="Mercado / infraestructura" value={deal.marketReference} /></CardContent></Card>
           <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Riesgos principales</CardTitle></CardHeader><CardContent className="grid gap-3 text-sm text-[#475467] md:grid-cols-3">{["Riesgo de mercado, tasa y liquidez.", "Riesgo de contraparte, documentación y ejecución.", "Disponibilidad sujeta a perfil, país y aprobación del aliado."].map((item) => <p key={item} className="rounded-md border border-[#DED6C7] bg-[#F4EFE7] p-3">{item}</p>)}</CardContent></Card>
-          <DataRoomSection />
+          <DataRoomSection user={user} deal={deal} hasAccess={hasDataRoomAccess} />
           <FinancingPipeline title="Flujo del deal" items={["Solicitud de acceso", "Validación KYC/KYB", "Revisión BINV", "Derivación a aliado operativo", "Ejecución externa", "Seguimiento informativo"]} />
           <InfoList title="FAQ del deal" items={["El acceso depende de KYC/KYB y clasificación de cliente.", "La documentación final pertenece al aliado, custodio, mercado o vehículo.", "BINV no recibe órdenes ni ejecuta operaciones desde la plataforma."]} icon={FileText} />
         </div>
         <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Ficha operativa</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
           {[["País", deal.country], ["Moneda", deal.currency], ["Ticket mínimo", money(deal.ticket, deal.currency)], ["Retorno esperado", deal.targetReturn], ["Plazo", deal.term], ["Riesgo", deal.risk], ["Estado", deal.status], ["Rol BINV", deal.binvRole], ["Estado de derivación", deal.referralStatus], ["Estructura legal", deal.legal]].map(([k, v]) => <div key={k} className="border-b border-[#DED6C7] pb-2"><p className="text-[#667085]">{k}</p><strong>{v}</strong></div>)}
-          <Button className="w-full">Solicitar evaluación</Button><Button className="w-full" variant="secondary">Conectar con aliado operativo</Button><Button className="w-full" variant="outline">Acceder al data room</Button>
+          <Button className="w-full">Solicitar evaluación</Button><Button className="w-full" variant="secondary">Conectar con aliado operativo</Button><Button className="w-full" variant="outline">{hasDataRoomAccess ? "Acceder al data room" : "Solicitar acceso al data room"}</Button>
         </CardContent></Card>
       </div>
       <OperationalDisclaimer country={country} deal={deal} />
@@ -1355,11 +1547,20 @@ function DealRoom({ country, deal }: { country: CountryCode; deal: Opportunity }
   );
 }
 
-function DataRoomSection() {
+function DataRoomSection({ user, deal, hasAccess }: { user: DemoUser; deal: Opportunity; hasAccess: boolean }) {
+  const docs = ["Memo ejecutivo.pdf", "Modelo financiero.xlsx", "Term sheet preliminar.pdf"];
   return (
-    <Card className="rounded-md border-[#DED6C7]">
-      <CardHeader><CardTitle>Documentos del data room</CardTitle><CardDescription>KYC/KYB aprobado requerido para documentación sensible.</CardDescription></CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-3">{["Memo ejecutivo.pdf", "Modelo financiero.xlsx", "Term sheet preliminar.pdf"].map((doc) => <div key={doc} className="flex items-center gap-2 rounded-md border border-[#DED6C7] p-3 text-sm"><LockKeyhole className="h-4 w-4 text-[#9C7A3E]" />{doc}</div>)}</CardContent>
+    <Card className={cn("rounded-md border-[#DED6C7]", !hasAccess && "border-[#BFA46A]/60 bg-[#FFF8E8]")}>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Documentos del data room</CardTitle>
+            <CardDescription>{hasAccess ? "Acceso habilitado para revisión documental." : `Acceso restringido. ${user.role} · KYC ${user.kyc} · ${deal.status}.`}</CardDescription>
+          </div>
+          <Badge variant="outline" className={hasAccess ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#BFA46A]/45 bg-[#BFA46A]/10 text-[#7A6032]"}>{hasAccess ? "Habilitado" : "Requiere aprobación"}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">{docs.map((doc) => <div key={doc} className="flex items-center gap-2 rounded-md border border-[#DED6C7] bg-[#FCFAF7] p-3 text-sm"><LockKeyhole className="h-4 w-4 text-[#9C7A3E]" />{hasAccess ? doc : `${doc} · bloqueado`}</div>)}</CardContent>
     </Card>
   );
 }
@@ -1394,19 +1595,26 @@ function Urbania({ country }: { country: CountryCode }) {
   );
 }
 
-function FinancingHub({ country }: { country: CountryCode }) {
+function FinancingHub({ country, user }: { country: CountryCode; user: DemoUser }) {
   const config = countryConfig[country];
   const partners = partnersByCountry[country].filter((item) => item.category === "Aliado operativo" || item.category === "Infraestructura de mercado" || item.category === "Vertical BINV");
+  const formFields = ["Razón social", country === "AR" ? "CUIT" : "RUC", "Sector", "Facturación mensual/anual", "Monto requerido", "Destino de fondos", "Plazo buscado", "Garantías disponibles", "Contacto"];
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Financing Hub" title="Solicitud de financiamiento empresarial" text={config.financingIntro} />
+      <div className="grid gap-4 md:grid-cols-3">
+        <InfoPill label="Perfil activo" value={user.role} />
+        <InfoPill label="Estado KYB" value={user.kyb} />
+        <InfoPill label="Mercado" value={`${config.label} · ${config.baseCurrency}/${config.secondaryCurrency}`} />
+      </div>
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
         <Card className="rounded-md border-[#DED6C7]"><CardContent className="grid gap-3 p-5 md:grid-cols-2">
-          {["País", "Razón social", country === "AR" ? "CUIT" : "RUC", "Sector", "Facturación mensual/anual", "Monto requerido", "Destino de fondos", "Plazo buscado", "Garantías disponibles", "Contacto"].map((field) => <Input key={field} placeholder={field} defaultValue={field === "País" ? config.label : ""} />)}
-          <select className="h-11 rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>Moneda sugerida: {config.baseCurrency} / {config.secondaryCurrency}</option></select>
-          <select className="h-11 rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>Instrumentos posibles</option>{financingInstrumentsByCountry[country].map((item) => <option key={item}>{item}</option>)}</select>
+          <FormField label="País"><Input defaultValue={config.label} /></FormField>
+          {formFields.map((field) => <FormField key={field} label={field}><Input placeholder={`Completar ${field.toLowerCase()}`} /></FormField>)}
+          <FormField label="Moneda sugerida"><select className="h-11 w-full rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>{config.baseCurrency} / {config.secondaryCurrency}</option></select></FormField>
+          <FormField label="Instrumento posible"><select className="h-11 w-full rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>Seleccionar instrumento</option>{financingInstrumentsByCountry[country].map((item) => <option key={item}>{item}</option>)}</select></FormField>
           <Button variant="outline"><Upload className="h-4 w-4" />Documentos adjuntos</Button>
-          <Textarea className="md:col-span-2" placeholder="Comentarios para análisis BINV" />
+          <FormField label="Comentarios para análisis BINV" className="md:col-span-2"><Textarea placeholder="Describe necesidad, urgencia, flujo de fondos y documentación disponible." /></FormField>
           <Button className="md:col-span-2">Enviar solicitud de evaluación</Button>
         </CardContent></Card>
         <div className="space-y-5">
@@ -1448,17 +1656,17 @@ function InvestorRelations({ country }: { country: CountryCode }) {
 }
 
 function Login() {
-  return <section className="mx-auto max-w-md space-y-5"><SectionTitle title="Acceso de clientes" text="Ingreso para inversionistas, empresas solicitantes, asesores y aliados externos." /><Card className="rounded-md border-[#DED6C7]"><CardContent className="space-y-3 p-5"><Input placeholder="Email corporativo" /><Input placeholder="Contraseña" type="password" /><Button className="w-full">Ingresar</Button><Button className="w-full" variant="outline">Registro inversionista</Button><Button className="w-full" variant="outline">Registro empresa</Button></CardContent></Card></section>;
+  return <section className="mx-auto max-w-md space-y-5"><SectionTitle title="Acceso de clientes" text="Ingreso para inversionistas, empresas solicitantes, asesores y aliados externos." /><Card className="rounded-md border-[#DED6C7]"><CardContent className="space-y-3 p-5"><FormField label="Email corporativo"><Input placeholder="nombre@empresa.com" /></FormField><FormField label="Contraseña"><Input placeholder="Contraseña" type="password" /></FormField><Button className="w-full">Ingresar</Button><Button className="w-full" variant="outline">Registro inversionista</Button><Button className="w-full" variant="outline">Registro empresa</Button></CardContent></Card></section>;
 }
 
-function Profile({ country }: { country: CountryCode }) {
+function Profile({ country, user, onLogout }: { country: CountryCode; user: DemoUser; onLogout: () => void }) {
   const config = countryConfig[country];
-  return <section className="space-y-5"><SectionTitle eyebrow="Perfil" title="Perfil del cliente" text="Preferencias, países habilitados, asesor asignado y estado documental." /><div className="grid gap-5 md:grid-cols-2"><InfoList title="Perfil inversionista" items={[`País principal: ${config.label}`, `Países habilitados: ${country === "PE" ? "Perú / Argentina previa validación" : "Argentina / Perú previa validación"}`, `Moneda base: ${config.baseCurrency}`, `Perfil de riesgo: ${config.riskProfile}`, "Horizonte de inversión: 24-36 meses", "Objetivo patrimonial: preservación y crecimiento", "Ticket promedio: USD 75,000", "Tipo de cliente: Cliente patrimonial / Inversionista calificado", "Asesor: María Torres", "Estado KYC: Aprobado", "Estado KYB: No aplica"]} icon={UserRoundCheck} /><InfoList title="Aliados y preferencias" items={[...partnersByCountry[country].slice(0, 4).map((item) => item.name), "Notificaciones: oportunidades, distribuciones, documentos pendientes y cambios regulatorios", "Documentos pendientes: declaración fiscal y actualización patrimonial"]} icon={Bell} /></div></section>;
+  return <section className="space-y-5"><SectionTitle eyebrow="Perfil" title="Perfil del cliente" text="Preferencias, países habilitados, asesor asignado y estado documental." /><div className="grid gap-5 md:grid-cols-2"><InfoList title="Perfil activo" items={[`Usuario demo: ${user.name}`, `Rol: ${user.role}`, `Perfil: ${user.profile}`, `Estado KYC: ${user.kyc}`, `Estado KYB: ${user.kyb}`, `País principal: ${config.label}`, `Países habilitados: ${country === "PE" ? "Perú / Argentina previa validación" : "Argentina / Perú previa validación"}`, `Moneda base: ${config.baseCurrency}`, `Perfil de riesgo: ${config.riskProfile}`, "Asesor: María Torres"]} icon={UserRoundCheck} /><InfoList title="Aliados y preferencias" items={[...partnersByCountry[country].slice(0, 4).map((item) => item.name), "Notificaciones: oportunidades, distribuciones, documentos pendientes y cambios regulatorios", "Documentos pendientes: declaración fiscal y actualización patrimonial"]} icon={Bell} /></div><Button variant="outline" onClick={onLogout}>Salir del demo</Button></section>;
 }
 
-function Kyc({ country }: { country: CountryCode }) {
+function Kyc({ country, user }: { country: CountryCode; user: DemoUser }) {
   const localId = country === "AR" ? "CUIT" : "RUC";
-  return <section className="space-y-5"><SectionTitle eyebrow="KYC / KYB" title="Validación obligatoria antes de data rooms sensibles" text="Usuarios sin KYC acceden solo a información pública. Empresas pueden solicitar financiamiento sin ver información sensible de inversionistas." /><div className="grid gap-5 lg:grid-cols-2"><InfoList title="KYC" items={["Identidad: Aprobado", "Domicilio: En revisión", "Origen de fondos: Requiere actualización", "Perfil de riesgo: Aprobado", "Declaraciones: En revisión", "Beneficiario final: Aprobado", "Estado fiscal: Observado", "Aprobación interna: En revisión"]} icon={BadgeCheck} /><InfoList title="KYB" items={["Razón social", localId, "Representante legal", "Estados financieros", "Endeudamiento", "Garantías", "Documentación societaria", "Beneficiario final", "Análisis crediticio", "Estado de revisión: No iniciado / En revisión / Observado / Aprobado / Rechazado"]} icon={BriefcaseBusiness} /></div></section>;
+  return <section className="space-y-5"><SectionTitle eyebrow="KYC / KYB" title="Validación obligatoria antes de data rooms sensibles" text="Usuarios sin KYC acceden solo a información pública. Empresas pueden solicitar financiamiento sin ver información sensible de inversionistas." /><div className="grid gap-4 md:grid-cols-3"><InfoPill label="Rol" value={user.role} /><InfoPill label="KYC" value={user.kyc} /><InfoPill label="KYB" value={user.kyb} /></div><div className="grid gap-5 lg:grid-cols-2"><InfoList title="KYC" items={["Identidad: Aprobado", "Domicilio: En revisión", "Origen de fondos: Requiere actualización", "Perfil de riesgo: Aprobado", "Declaraciones: En revisión", "Beneficiario final: Aprobado", "Estado fiscal: Observado", `Aprobación interna: ${user.kyc}`]} icon={BadgeCheck} /><InfoList title="KYB" items={["Razón social", localId, "Representante legal", "Estados financieros", "Endeudamiento", "Garantías", "Documentación societaria", "Beneficiario final", "Análisis crediticio", `Estado de revisión: ${user.kyb}`]} icon={BriefcaseBusiness} /></div></section>;
 }
 
 function Partners({ country }: { country: CountryCode }) {
@@ -1476,6 +1684,10 @@ function Faq({ country }: { country: CountryCode }) {
 
 function InfoList({ title, items, icon: Icon }: { title: string; items: string[]; icon: typeof BarChart3 }) {
   return <Card className="rounded-md border-[#DED6C7] bg-[#FCFAF7] shadow-[0_18px_50px_-38px_rgba(11,16,32,0.45)]"><CardHeader><div className="flex items-center gap-2"><Icon className="h-5 w-5 text-[#9C7A3E]" /><CardTitle>{title}</CardTitle></div></CardHeader><CardContent className="space-y-2">{items.map((item) => <div key={item} className="flex items-start gap-2 rounded-md bg-[#F4EFE7] p-3 text-sm text-[#475467]"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#027A48]" />{item}</div>)}</CardContent></Card>;
+}
+
+function FormField({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+  return <label className={cn("grid gap-1.5 text-sm font-semibold text-[#344054]", className)}><span>{label}</span>{children}</label>;
 }
 
 

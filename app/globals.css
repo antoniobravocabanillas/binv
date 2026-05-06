@@ -656,9 +656,30 @@ select:-webkit-autofill:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
   .landing-network-flow,
   .landing-network-node,
   .landing-network-architecture,
+  .capital-flow-line,
+  .capital-pulse,
+  .capital-float,
+  .capital-slow-pan,
+  .capital-drift,
+  .capital-drift-reverse,
+  .capital-soft-particle,
+  .capital-light-streak,
+  .capital-signal,
   .landing-ecosystem h2,
   .landing-ecosystem h3,
   .landing-ecosystem p,

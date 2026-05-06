@@ -212,55 +212,61 @@ enum StaffDepartment {
 }
 
 model User {
-  id               String                @id @default(cuid())
-  name             String?
-  email            String                @unique
-  emailVerified    DateTime?
-  image            String?
-  passwordHash     String?
-  role             Role                  @default(CUSTOMER)
-  accounts         Account[]
-  sessions         Session[]
-  orders           Order[]
-  addresses        Address[]
-  favorites        Favorite[]
-  assignedChats    ChatConversation[]
-  ticketMessages   TicketMessage[]
-  internalMessages InternalChatMessage[]
-  notifications    Notification[]
-  activityLogs     ActivityLog[]
-  staffProfile     StaffProfile?
-  clientProfile    Client?
-  clientAccounts   ClientAccount[]
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  id                     String                  @id @default(cuid())
+  name                   String?
+  email                  String                  @unique
+  emailVerified          DateTime?
+  image                  String?
+  passwordHash           String?
+  role                   Role                    @default(CUSTOMER)
+  accounts               Account[]
+  sessions               Session[]
+  orders                 Order[]
+  addresses              Address[]
+  favorites              Favorite[]
+  assignedChats          ChatConversation[]
+  ticketMessages         TicketMessage[]
+  internalMessages       InternalChatMessage[]
+  notifications          Notification[]
+  activityLogs           ActivityLog[]
+  staffProfile           StaffProfile?
+  clientProfile          Client?
+  clientAccounts         ClientAccount[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  binvClientProfile      BinvClientProfile?
+  binvDocuments          BinvDocument[]
+  binvDataRoomAccesses   BinvDataRoomAccess[]
+  binvAdvisorAssignments BinvAdvisorAssignment[]
+  binvAuditLogs          BinvAuditLog[]
 }
 
 model Company {
-  id            String          @id @default(cuid())
-  legalName     String
-  tradeName     String?
-  document      String?
-  email         String?
-  phone         String?
-  address       String?
-  city          String?
-  industry      String?
-  status        String          @default("prospecto")
-  contacts      Contact[]
-  accounts      ClientAccount[]
-  clients       Client[]
-  leads         Lead[]
-  opportunities Opportunity[]
-  quotes        Quote[]
-  sales         Sale[]
-  projects      Project[]
-  tickets       Ticket[]
-  documents     Document[]
-  activities    ActivityLog[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  deletedAt     DateTime?
+  id                  String               @id @default(cuid())
+  legalName           String
+  tradeName           String?
+  document            String?
+  email               String?
+  phone               String?
+  address             String?
+  city                String?
+  industry            String?
+  status              String               @default("prospecto")
+  contacts            Contact[]
+  accounts            ClientAccount[]
+  clients             Client[]
+  leads               Lead[]
+  opportunities       Opportunity[]
+  quotes              Quote[]
+  sales               Sale[]
+  projects            Project[]
+  tickets             Ticket[]
+  documents           Document[]
+  activities          ActivityLog[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+  binvCompanyProfiles BinvCompanyProfile[]
 
   @@index([document])
   @@index([status])
@@ -1222,4 +1228,441 @@ model ActivityLog {
   @@index([saleId, createdAt])
   @@index([projectId, createdAt])
   @@index([ticketId, createdAt])
+}
+
+enum BinvCountryCode {
+  PE
+  AR
+  GLOBAL
+}
+
+enum BinvCurrency {
+  USD
+  PEN
+  ARS
+}
+
+enum BinvUserRole {
+  SUPER_ADMIN
+  ADMIN_BINV
+  ADVISOR
+  ANALYST
+  INVESTOR_CLIENT
+  FINANCING_COMPANY
+  EXTERNAL_PARTNER
+}
+
+enum BinvKycStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum BinvProfileKind {
+  PUBLIC
+  QUALIFIED
+  PROFESSIONAL
+  INSTITUTIONAL
+}
+
+enum BinvPartnerCategory {
+  OPERATING_PARTNER
+  MARKET_INFRASTRUCTURE
+  INTERNATIONAL_CUSTODY
+  BINV_VERTICAL
+  REGIONAL_REFERENCE
+}
+
+enum BinvRiskLevel {
+  CONSERVATIVE
+  MODERATE
+  HIGH
+  PROFESSIONAL
+  INSTITUTIONAL
+}
+
+enum BinvDealStatus {
+  OPEN
+  IN_ANALYSIS
+  CLOSED
+  COMING_SOON
+  QUALIFIED_CLIENTS_ONLY
+  STRUCTURING
+  REFERRED_TO_PARTNER
+}
+
+enum BinvDocumentVisibility {
+  PUBLIC
+  KYC_REQUIRED
+  QUALIFIED_ONLY
+  INTERNAL
+  PARTNER_ONLY
+}
+
+enum BinvFinancingPipelineStatus {
+  RECEIVED
+  BINV_ANALYSIS
+  DOCUMENTATION_REQUIRED
+  SENT_TO_PARTNER
+  PARTNER_REVIEW
+  APPROVED
+  REJECTED
+  CLOSED
+}
+
+enum BinvAuditAction {
+  LOGIN
+  STATUS_CHANGE
+  DOCUMENT_UPLOAD
+  DOCUMENT_DOWNLOAD
+  KYC_APPROVAL
+  OPPORTUNITY_EDIT
+  PARTNER_REFERRAL
+  INTERNAL_COMMENT
+  MARKET_DATA_REFRESH
+}
+
+model BinvCountry {
+  id                String                 @id @default(cuid())
+  code              BinvCountryCode        @unique
+  label             String
+  baseCurrency      BinvCurrency
+  secondaryCurrency BinvCurrency?
+  context           String
+  active            Boolean                @default(true)
+  partners          BinvPartner[]
+  opportunities     BinvOpportunity[]
+  financingRequests BinvFinancingRequest[]
+  urbaniaProjects   BinvUrbaniaProject[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+}
+
+model BinvClientProfile {
+  id                 String                  @id @default(cuid())
+  userId             String?                 @unique
+  user               User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  displayName        String
+  email              String?
+  role               BinvUserRole            @default(INVESTOR_CLIENT)
+  profileKind        BinvProfileKind         @default(PUBLIC)
+  kycStatus          BinvKycStatus           @default(PENDING)
+  kybStatus          BinvKycStatus           @default(PENDING)
+  primaryCountry     BinvCountryCode         @default(PE)
+  baseCurrency       BinvCurrency            @default(USD)
+  riskProfile        BinvRiskLevel           @default(MODERATE)
+  portfolios         BinvPortfolio[]
+  dataRoomAccesses   BinvDataRoomAccess[]
+  notifications      BinvNotification[]
+  advisorAssignments BinvAdvisorAssignment[] @relation("BinvClientAdvisorAssignments")
+  auditLogs          BinvAuditLog[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@index([role, kycStatus])
+  @@index([primaryCountry])
+}
+
+model BinvCompanyProfile {
+  id                String                 @id @default(cuid())
+  companyId         String?
+  company           Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  legalName         String
+  taxId             String
+  countryCode       BinvCountryCode
+  sector            String?
+  monthlyRevenue    Decimal?               @db.Decimal(18, 2)
+  annualRevenue     Decimal?               @db.Decimal(18, 2)
+  kybStatus         BinvKycStatus          @default(PENDING)
+  financingRequests BinvFinancingRequest[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([countryCode, taxId])
+  @@index([kybStatus])
+}
+
+model BinvPartner {
+  id              String                  @id @default(cuid())
+  name            String
+  category        BinvPartnerCategory
+  countryId       String?
+  country         BinvCountry?            @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  roleDescription String
+  active          Boolean                 @default(true)
+  opportunities   BinvOpportunity[]
+  portfolioItems  BinvPortfolioPosition[]
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([category, active])
+  @@index([countryId])
+}
+
+model BinvOpportunity {
+  id                       String                   @id @default(cuid())
+  code                     String                   @unique
+  name                     String
+  countryId                String?
+  country                  BinvCountry?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  countryCode              BinvCountryCode
+  assetType                String
+  operatingPartnerId       String?
+  operatingPartner         BinvPartner?             @relation(fields: [operatingPartnerId], references: [id], onDelete: SetNull)
+  ticketMinimum            Decimal                  @db.Decimal(18, 2)
+  currency                 BinvCurrency
+  targetReturn             String
+  term                     String
+  riskLevel                BinvRiskLevel
+  status                   BinvDealStatus           @default(STRUCTURING)
+  summary                  String
+  thesis                   String?
+  legalStructure           String?
+  mainRisks                String[]
+  requiresKyc              Boolean                  @default(true)
+  requiresQualifiedProfile Boolean                  @default(false)
+  documents                BinvDocument[]
+  dataRoomAccesses         BinvDataRoomAccess[]
+  portfolioPositions       BinvPortfolioPosition[]
+  cashflowProjections      BinvCashflowProjection[]
+  auditLogs                BinvAuditLog[]
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+
+  @@index([countryCode, assetType])
+  @@index([status, riskLevel])
+  @@index([operatingPartnerId])
+}
+
+model BinvPortfolio {
+  id           String                   @id @default(cuid())
+  clientId     String
+  client       BinvClientProfile        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name         String
+  baseCurrency BinvCurrency             @default(USD)
+  countryCode  BinvCountryCode?
+  positions    BinvPortfolioPosition[]
+  cashflows    BinvCashflowProjection[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([clientId])
+  @@index([countryCode])
+}
+
+model BinvPortfolioPosition {
+  id                  String                    @id @default(cuid())
+  portfolioId         String
+  portfolio           BinvPortfolio             @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  opportunityId       String?
+  opportunity         BinvOpportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  operatingPartnerId  String?
+  operatingPartner    BinvPartner?              @relation(fields: [operatingPartnerId], references: [id], onDelete: SetNull)
+  symbol              String?
+  market              String?
+  assetName           String
+  assetType           String
+  countryCode         BinvCountryCode
+  currency            BinvCurrency
+  quantity            Decimal                   @default(0) @db.Decimal(24, 8)
+  averageCost         Decimal                   @default(0) @db.Decimal(18, 6)
+  lastManualPrice     Decimal?                  @db.Decimal(18, 6)
+  lastMarketPrice     Decimal?                  @db.Decimal(18, 6)
+  lastMarketPriceAt   DateTime?
+  executionVenue      String?
+  dataSource          String                    @default("manual")
+  documents           BinvDocument[]
+  cashflowProjections BinvCashflowProjection[]
+  marketDataSnapshots BinvMarketQuoteSnapshot[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@index([portfolioId])
+  @@index([symbol, market])
+  @@index([countryCode, assetType])
+  @@index([opportunityId])
+}
+
+model BinvMarketQuoteSnapshot {
+  id            String                 @id @default(cuid())
+  positionId    String?
+  position      BinvPortfolioPosition? @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  symbol        String
+  market        String
+  currency      BinvCurrency
+  price         Decimal                @db.Decimal(18, 6)
+  previousClose Decimal?               @db.Decimal(18, 6)
+  change        Decimal?               @db.Decimal(18, 6)
+  changePct     Decimal?               @db.Decimal(10, 4)
+  provider      String
+  delayed       Boolean                @default(true)
+  asOf          DateTime
+  createdAt     DateTime               @default(now())
+
+  @@index([symbol, market, asOf])
+  @@index([positionId, asOf])
+}
+
+model BinvCashflowProjection {
+  id             String                 @id @default(cuid())
+  portfolioId    String?
+  portfolio      BinvPortfolio?         @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  positionId     String?
+  position       BinvPortfolioPosition? @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  opportunityId  String?
+  opportunity    BinvOpportunity?       @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  label          String
+  expectedDate   DateTime
+  expectedAmount Decimal                @db.Decimal(18, 2)
+  currency       BinvCurrency
+  status         String                 @default("projected")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([portfolioId, expectedDate])
+  @@index([positionId, expectedDate])
+  @@index([opportunityId])
+}
+
+model BinvDocument {
+  id            String                 @id @default(cuid())
+  title         String
+  url           String
+  type          String?
+  visibility    BinvDocumentVisibility @default(INTERNAL)
+  opportunityId String?
+  opportunity   BinvOpportunity?       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  positionId    String?
+  position      BinvPortfolioPosition? @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  uploadedById  String?
+  uploadedBy    User?                  @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([visibility])
+  @@index([opportunityId])
+  @@index([positionId])
+}
+
+model BinvDataRoomAccess {
+  id            String            @id @default(cuid())
+  opportunityId String
+  opportunity   BinvOpportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        BinvClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status        String            @default("requested")
+  requestedAt   DateTime          @default(now())
+  approvedAt    DateTime?
+  approvedById  String?
+  approvedBy    User?             @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+  notes         String?
+
+  @@unique([opportunityId, clientId])
+  @@index([status, requestedAt])
+}
+
+model BinvFinancingRequest {
+  id                 String                      @id @default(cuid())
+  countryId          String?
+  country            BinvCountry?                @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  countryCode        BinvCountryCode
+  companyProfileId   String?
+  companyProfile     BinvCompanyProfile?         @relation(fields: [companyProfileId], references: [id], onDelete: SetNull)
+  legalName          String
+  taxId              String
+  sector             String
+  revenue            String
+  amountRequested    Decimal                     @db.Decimal(18, 2)
+  currency           BinvCurrency
+  useOfFunds         String
+  desiredTerm        String
+  guarantees         String?
+  possibleInstrument String?
+  contactName        String
+  contactEmail       String
+  status             BinvFinancingPipelineStatus @default(RECEIVED)
+  notes              String?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  @@index([countryCode, status])
+  @@index([companyProfileId])
+  @@index([createdAt])
+}
+
+model BinvUrbaniaProject {
+  id                String       @id @default(cuid())
+  code              String       @unique
+  name              String
+  countryId         String?
+  country           BinvCountry? @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  location          String
+  ticketMinimum     Decimal      @db.Decimal(18, 2)
+  currency          BinvCurrency @default(USD)
+  targetReturn      String
+  term              String
+  permitStatus      String
+  financialProgress Int          @default(0)
+  workProgress      Int          @default(0)
+  availableUnits    Int          @default(0)
+  status            String
+  structure         String
+  documents         Json?
+  timeline          Json?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([status])
+  @@index([countryId])
+}
+
+model BinvNotification {
+  id        String             @id @default(cuid())
+  clientId  String?
+  client    BinvClientProfile? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      String             @default("system")
+  readAt    DateTime?
+  createdAt DateTime           @default(now())
+
+  @@index([clientId, readAt])
+}
+
+model BinvAdvisorAssignment {
+  id        String            @id @default(cuid())
+  clientId  String
+  client    BinvClientProfile @relation("BinvClientAdvisorAssignments", fields: [clientId], references: [id], onDelete: Cascade)
+  advisorId String
+  advisor   User              @relation(fields: [advisorId], references: [id], onDelete: Cascade)
+  role      String            @default("advisor")
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+
+  @@unique([clientId, advisorId, role])
+  @@index([advisorId, active])
+}
+
+model BinvAuditLog {
+  id            String             @id @default(cuid())
+  actorUserId   String?
+  actorUser     User?              @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  clientId      String?
+  client        BinvClientProfile? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  action        BinvAuditAction
+  entityType    String
+  entityId      String
+  title         String
+  body          String?
+  metadata      Json?
+  opportunityId String?
+  opportunity   BinvOpportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([opportunityId, createdAt])
 }
