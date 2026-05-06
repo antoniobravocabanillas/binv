@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     default: `${brand.name} | ${brand.descriptor}`,
     template: `%s | ${brand.shortName}`
   },
-  description: "Soluciones profesionales en topografia, geodesia, ingenieria, construccion, consultoria, venta tecnica, alquiler y soporte especializado."
+  description: "Plataforma institucional de asesoramiento, originacion y estructuracion financiera para clientes e instituciones en Argentina y Peru."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
