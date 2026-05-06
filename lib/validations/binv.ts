@@ -51,3 +51,33 @@ export const dataRoomAccessSchema = z.object({
   opportunityId: z.string().min(1)
 });
 
+const optionalText = (max = 600) => z.preprocess((value) => value === "" ? undefined : value, z.string().max(max).optional());
+
+export const adminOpportunitySchema = z.object({
+  code: z.preprocess((value) => value === "" ? undefined : value, z.string().min(2).max(80).optional()),
+  name: z.string().min(3).max(160),
+  country: countrySchema,
+  assetType: z.string().min(2).max(80),
+  operatingPartner: z.preprocess((value) => value === "" ? undefined : value, z.string().min(2).max(120).optional()),
+  ticket: z.coerce.number().nonnegative(),
+  currency: currencySchema,
+  targetReturn: z.string().min(2).max(120),
+  term: z.string().min(2).max(80),
+  risk: z.enum(["Conservador", "Moderado", "Alto", "Profesional", "Institucional"]),
+  status: z.enum(["Abierta", "En análisis", "Próximamente", "Solo clientes calificados", "Cerrada", "En estructuración", "Derivada a aliado"]),
+  summary: z.string().min(10).max(600),
+  thesis: optionalText(1200),
+  legalStructure: optionalText(600),
+  mainRisks: z.array(z.string().min(2).max(160)).max(8).optional(),
+  requiresKyc: z.coerce.boolean().default(true),
+  requiresQualifiedProfile: z.coerce.boolean().default(false)
+});
+
+export const adminOpportunityPatchSchema = adminOpportunitySchema.partial().extend({
+  id: z.string().min(1).optional()
+});
+
+export const adminFinancingStatusSchema = z.object({
+  status: z.enum(["RECEIVED", "BINV_ANALYSIS", "DOCUMENTATION_REQUIRED", "SENT_TO_PARTNER", "PARTNER_REVIEW", "APPROVED", "REJECTED", "CLOSED"]),
+  notes: z.string().max(1000).optional()
+});

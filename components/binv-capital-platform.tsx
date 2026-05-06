@@ -169,6 +169,27 @@ type FinancingResponse = {
   nextAction: string;
 };
 
+type AdminOpportunityPayload = {
+  source: "database" | "fallback";
+  items: ApiOpportunity[];
+};
+
+type AdminFinancingRequest = {
+  id: string;
+  country: CountryCode;
+  legalName: string;
+  taxId: string;
+  sector: string;
+  amountRequested: number;
+  currency: "USD" | "PEN" | "ARS";
+  instrument: string;
+  status: string;
+  statusLabel: string;
+  contactName: string;
+  contactEmail: string;
+  createdAt: string;
+};
+
 const countryConfig: Record<CountryCode, {
   label: string;
   flag: string;
@@ -1311,6 +1332,7 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [apiOpportunities, setApiOpportunities] = useState<Opportunity[] | null>(null);
   const [opportunitiesApiStatus, setOpportunitiesApiStatus] = useState<"loading" | "connected" | "fallback">("loading");
+  const [opportunitiesRefreshKey, setOpportunitiesRefreshKey] = useState(0);
   const [selectedDeal, setSelectedDeal] = useState<Opportunity>(getVisibleOpportunities("PE")[0]);
   const [asset, setAsset] = useState("Todos");
   const [partner, setPartner] = useState("Todos");
@@ -1356,7 +1378,7 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
       });
 
     return () => controller.abort();
-  }, [country]);
+  }, [country, opportunitiesRefreshKey]);
 
   const opportunitySource = apiOpportunities ?? getVisibleOpportunities(country);
 
@@ -1509,7 +1531,7 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
           {view === "urbania" && <Urbania country={country} />}
           {view === "financing" && <FinancingHub country={country} user={user} />}
           {view === "investors" && <InvestorRelations country={country} />}
-          {view === "admin" && <AdminPanel country={country} />}
+            {view === "admin" && <AdminPanel country={country} onDataChange={() => setOpportunitiesRefreshKey((value) => value + 1)} />}
           {view === "login" && <Login />}
           {view === "profile" && <Profile country={country} user={user} onLogout={onLogout} />}
           {view === "kyc" && <Kyc country={country} user={user} />}
@@ -1957,12 +1979,219 @@ function FinancingPipeline({ title, items }: { title: string; items: string[] })
   return <InfoList title={title} items={items} icon={CheckCircle2} />;
 }
 
-function AdminPanel({ country }: { country: CountryCode }) {
+function AdminPanel({ country, onDataChange }: { country: CountryCode; onDataChange: () => void }) {
   const modules = ["Usuarios", "KYC/KYB", "Oportunidades", "Deals", "Urbania Projects", "Solicitudes de financiamiento", "Aliados", "Países", "Documentos", "Data rooms", "Logs de auditoría", "Configuración de disclaimers", "FAQ", "Roles y permisos"];
+  const [adminOpportunities, setAdminOpportunities] = useState<ApiOpportunity[]>([]);
+  const [opportunitySource, setOpportunitySource] = useState<"database" | "fallback">("fallback");
+  const [financingRequests, setFinancingRequests] = useState<AdminFinancingRequest[]>([]);
+  const [adminStatus, setAdminStatus] = useState<"loading" | "ready" | "saving" | "error">("loading");
+  const [adminMessage, setAdminMessage] = useState("");
+
+  const adminHeaders = useMemo(() => ({
+    "Content-Type": "application/json",
+    "x-binv-admin-role": "Admin BINV"
+  }), []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadAdminData() {
+      setAdminStatus("loading");
+      try {
+        const [opportunityResponse, financingResponse] = await Promise.all([
+          fetch(`/api/binv/admin/opportunities?country=${country}`, { headers: adminHeaders }),
+          fetch(`/api/binv/admin/financing-requests?country=${country}`, { headers: adminHeaders })
+        ]);
+        if (!opportunityResponse.ok || !financingResponse.ok) throw new Error("No se pudo cargar admin");
+        const opportunities = await opportunityResponse.json() as { data: AdminOpportunityPayload };
+        const financing = await financingResponse.json() as { data: AdminFinancingRequest[] };
+        if (!active) return;
+        setAdminOpportunities(opportunities.data.items);
+        setOpportunitySource(opportunities.data.source);
+        setFinancingRequests(financing.data);
+        setAdminStatus("ready");
+      } catch {
+        if (!active) return;
+        setAdminStatus("error");
+        setAdminMessage("No se pudo conectar el admin con la base. Revisa DATABASE_URL o intenta nuevamente.");
+      }
+    }
+
+    loadAdminData();
+    return () => { active = false; };
+  }, [adminHeaders, country]);
+
+  async function refreshAdminData() {
+    const [opportunityResponse, financingResponse] = await Promise.all([
+      fetch(`/api/binv/admin/opportunities?country=${country}`, { headers: adminHeaders }),
+      fetch(`/api/binv/admin/financing-requests?country=${country}`, { headers: adminHeaders })
+    ]);
+    const opportunities = await opportunityResponse.json() as { data: AdminOpportunityPayload };
+    const financing = await financingResponse.json() as { data: AdminFinancingRequest[] };
+    setAdminOpportunities(opportunities.data.items);
+    setOpportunitySource(opportunities.data.source);
+    setFinancingRequests(financing.data);
+    onDataChange();
+  }
+
+  async function createAdminOpportunity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setAdminStatus("saving");
+    setAdminMessage("");
+
+    const payload = {
+      code: String(form.get("code") || ""),
+      name: String(form.get("name") || ""),
+      country: String(form.get("country") || country),
+      assetType: String(form.get("assetType") || ""),
+      operatingPartner: String(form.get("operatingPartner") || ""),
+      ticket: Number(form.get("ticket") || 0),
+      currency: String(form.get("currency") || "USD"),
+      targetReturn: String(form.get("targetReturn") || ""),
+      term: String(form.get("term") || ""),
+      risk: String(form.get("risk") || "Moderado"),
+      status: String(form.get("status") || "En estructuración"),
+      summary: String(form.get("summary") || ""),
+      thesis: String(form.get("thesis") || ""),
+      legalStructure: String(form.get("legalStructure") || ""),
+      mainRisks: String(form.get("mainRisks") || "").split(",").map((item) => item.trim()).filter(Boolean),
+      requiresKyc: form.get("requiresKyc") === "on",
+      requiresQualifiedProfile: form.get("requiresQualifiedProfile") === "on"
+    };
+
+    try {
+      const response = await fetch("/api/binv/admin/opportunities", {
+        method: "POST",
+        headers: adminHeaders,
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error("No se pudo crear oportunidad");
+      event.currentTarget.reset();
+      await refreshAdminData();
+      setAdminStatus("ready");
+      setAdminMessage("Oportunidad creada y publicada para consumo del front.");
+    } catch {
+      setAdminStatus("error");
+      setAdminMessage("No se pudo crear la oportunidad. Revisa campos obligatorios o duplicidad de código.");
+    }
+  }
+
+  async function updateOpportunityStatus(id: string, statusValue: string) {
+    setAdminStatus("saving");
+    try {
+      const response = await fetch(`/api/binv/admin/opportunities/${id}`, {
+        method: "PATCH",
+        headers: adminHeaders,
+        body: JSON.stringify({ status: statusValue })
+      });
+      if (!response.ok) throw new Error("No se pudo actualizar estado");
+      await refreshAdminData();
+      setAdminStatus("ready");
+      setAdminMessage("Estado de oportunidad actualizado.");
+    } catch {
+      setAdminStatus("error");
+      setAdminMessage("No se pudo actualizar la oportunidad.");
+    }
+  }
+
+  async function deleteAdminOpportunity(id: string) {
+    setAdminStatus("saving");
+    try {
+      const response = await fetch(`/api/binv/admin/opportunities/${id}`, {
+        method: "DELETE",
+        headers: adminHeaders
+      });
+      if (!response.ok) throw new Error("No se pudo eliminar oportunidad");
+      await refreshAdminData();
+      setAdminStatus("ready");
+      setAdminMessage("Oportunidad eliminada de la base.");
+    } catch {
+      setAdminStatus("error");
+      setAdminMessage("No se pudo eliminar. Si tiene documentos o posiciones asociadas, conviene cerrarla en vez de borrarla.");
+    }
+  }
+
+  async function updateFinancingStatus(id: string, statusValue: string) {
+    setAdminStatus("saving");
+    try {
+      const response = await fetch(`/api/binv/admin/financing-requests/${id}`, {
+        method: "PATCH",
+        headers: adminHeaders,
+        body: JSON.stringify({ status: statusValue })
+      });
+      if (!response.ok) throw new Error("No se pudo actualizar solicitud");
+      await refreshAdminData();
+      setAdminStatus("ready");
+      setAdminMessage("Pipeline de financiamiento actualizado.");
+    } catch {
+      setAdminStatus("error");
+      setAdminMessage("No se pudo actualizar la solicitud.");
+    }
+  }
+
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Admin Panel" title="Gestión institucional" text={`Control operativo para contenido, usuarios y procesos por país activo: ${countryConfig[country].label}.`} />
-      <div className="grid gap-4 md:grid-cols-4">{["KYC pendientes 12", "Deals activos 8", "Solicitudes 19", "Usuarios 248"].map((item) => <AdminMetricCard key={item} label={item} />)}</div>
+      <div className="grid gap-4 md:grid-cols-4">
+        <AdminMetricCard label={`Fuente ${opportunitySource === "database" ? "Prisma" : "fallback"}`} />
+        <AdminMetricCard label={`Deals visibles ${adminOpportunities.length}`} />
+        <AdminMetricCard label={`Solicitudes ${financingRequests.length}`} />
+        <AdminMetricCard label={adminStatus === "saving" ? "Guardando cambios" : adminStatus === "loading" ? "Conectando backend" : "Admin conectado"} />
+      </div>
+      {adminMessage ? <p className={cn("rounded-md border p-3 text-sm font-semibold", adminStatus === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-[#BFA46A]/30 bg-[#F8F0DD] text-[#5A431C]")}>{adminMessage}</p> : null}
+      <Card className="rounded-md border-[#DED6C7] bg-[#FCFAF7] shadow-[0_18px_50px_-38px_rgba(11,16,32,0.45)]">
+        <CardHeader>
+          <CardTitle>Cargar oportunidad al Investment Hub</CardTitle>
+          <CardDescription>Estos datos se guardan en Prisma y el front los consume desde `/api/binv/opportunities`.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={createAdminOpportunity} className="grid gap-3 md:grid-cols-3">
+            <FormField label="Código"><Input name="code" placeholder={`${country.toLowerCase()}-nuevo-deal`} /></FormField>
+            <FormField label="Nombre"><Input name="name" required placeholder="Deuda privada corporativa" /></FormField>
+            <FormField label="País"><select name="country" defaultValue={country} className="h-11 rounded-md border bg-[#FCFAF7] px-3 text-sm"><option value="PE">Perú</option><option value="AR">Argentina</option><option value="GLOBAL">Global</option></select></FormField>
+            <FormField label="Tipo de activo"><Input name="assetType" required placeholder="Deuda Privada" /></FormField>
+            <FormField label="Aliado operativo"><Input name="operatingPartner" placeholder={country === "AR" ? "ADCAP" : "INVIU"} /></FormField>
+            <FormField label="Ticket mínimo"><Input name="ticket" type="number" min="0" step="1000" required placeholder="50000" /></FormField>
+            <FormField label="Moneda"><select name="currency" defaultValue="USD" className="h-11 rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>USD</option><option>PEN</option><option>ARS</option></select></FormField>
+            <FormField label="Retorno objetivo"><Input name="targetReturn" required placeholder="10% - 13% objetivo anual" /></FormField>
+            <FormField label="Plazo"><Input name="term" required placeholder="12-24 meses" /></FormField>
+            <FormField label="Riesgo"><select name="risk" defaultValue="Moderado" className="h-11 rounded-md border bg-[#FCFAF7] px-3 text-sm">{["Conservador", "Moderado", "Alto", "Profesional", "Institucional"].map((item) => <option key={item}>{item}</option>)}</select></FormField>
+            <FormField label="Estado"><select name="status" defaultValue="En estructuración" className="h-11 rounded-md border bg-[#FCFAF7] px-3 text-sm">{["Abierta", "En análisis", "Próximamente", "Solo clientes calificados", "Cerrada", "En estructuración", "Derivada a aliado"].map((item) => <option key={item}>{item}</option>)}</select></FormField>
+            <FormField label="Riesgos principales"><Input name="mainRisks" placeholder="liquidez, plazo, contraparte" /></FormField>
+            <FormField label="Resumen" className="md:col-span-3"><Textarea name="summary" required placeholder="Resumen ejecutivo visible en el Investment Hub." /></FormField>
+            <FormField label="Tesis" className="md:col-span-2"><Textarea name="thesis" placeholder="Tesis de inversión o financiamiento." /></FormField>
+            <FormField label="Estructura legal"><Textarea name="legalStructure" placeholder="Contrato, vehículo, fideicomiso o instrumento según corresponda." /></FormField>
+            <label className="flex items-center gap-2 text-sm font-semibold text-[#344054]"><input name="requiresKyc" type="checkbox" defaultChecked /> Requiere KYC/KYB</label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-[#344054]"><input name="requiresQualifiedProfile" type="checkbox" /> Solo perfil calificado</label>
+            <div className="md:col-span-3"><Button type="submit" disabled={adminStatus === "saving"}>{adminStatus === "saving" ? "Guardando..." : "Publicar oportunidad"}</Button></div>
+          </form>
+        </CardContent>
+      </Card>
+      <Card className="rounded-md border-[#DED6C7] bg-[#FCFAF7] shadow-[0_18px_50px_-38px_rgba(11,16,32,0.45)]">
+        <CardHeader>
+          <CardTitle>Oportunidades administradas</CardTitle>
+          <CardDescription>Edición rápida de estado y baja operativa. Para producción conviene agregar versionado y aprobación de publicación.</CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[920px] text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.12em] text-[#667085]"><tr><th className="p-3">Deal</th><th className="p-3">País</th><th className="p-3">Activo</th><th className="p-3">Aliado</th><th className="p-3">Ticket</th><th className="p-3">Estado</th><th className="p-3">Acción</th></tr></thead>
+            <tbody>{adminOpportunities.map((deal) => <tr key={deal.id} className="border-t border-[#DED6C7]"><td className="p-3 font-bold text-[#07111F]">{deal.name}</td><td className="p-3">{deal.country}</td><td className="p-3">{deal.assetType}</td><td className="p-3">{deal.operatingPartner}</td><td className="p-3">{money(deal.ticket, deal.currency)}</td><td className="p-3"><select value={normalizeDealStatus(deal.status)} onChange={(event) => updateOpportunityStatus(deal.id, event.target.value)} className="h-9 rounded-md border bg-white px-2 text-xs">{["Abierta", "En análisis", "Próximamente", "Solo clientes calificados", "Cerrada", "En estructuración", "Derivada a aliado"].map((item) => <option key={item}>{item}</option>)}</select></td><td className="p-3"><Button type="button" size="sm" variant="outline" onClick={() => deleteAdminOpportunity(deal.id)}>Eliminar</Button></td></tr>)}</tbody>
+          </table>
+        </CardContent>
+      </Card>
+      <Card className="rounded-md border-[#DED6C7] bg-[#FCFAF7] shadow-[0_18px_50px_-38px_rgba(11,16,32,0.45)]">
+        <CardHeader>
+          <CardTitle>Solicitudes de financiamiento</CardTitle>
+          <CardDescription>Las empresas cargan solicitudes desde el Financing Hub y el admin gestiona el pipeline.</CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[920px] text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.12em] text-[#667085]"><tr><th className="p-3">Empresa</th><th className="p-3">Tax ID</th><th className="p-3">Sector</th><th className="p-3">Monto</th><th className="p-3">Instrumento</th><th className="p-3">Contacto</th><th className="p-3">Pipeline</th></tr></thead>
+            <tbody>{financingRequests.map((request) => <tr key={request.id} className="border-t border-[#DED6C7]"><td className="p-3 font-bold text-[#07111F]">{request.legalName}</td><td className="p-3">{request.taxId}</td><td className="p-3">{request.sector}</td><td className="p-3">{money(request.amountRequested, request.currency)}</td><td className="p-3">{request.instrument}</td><td className="p-3">{request.contactName}<br /><span className="text-xs text-[#667085]">{request.contactEmail}</span></td><td className="p-3"><select value={request.status} onChange={(event) => updateFinancingStatus(request.id, event.target.value)} className="h-9 rounded-md border bg-white px-2 text-xs"><option value="RECEIVED">Recibido</option><option value="BINV_ANALYSIS">En análisis BINV</option><option value="DOCUMENTATION_REQUIRED">Documentación requerida</option><option value="SENT_TO_PARTNER">Enviado a aliado</option><option value="PARTNER_REVIEW">En evaluación por aliado</option><option value="APPROVED">Aprobado</option><option value="REJECTED">Rechazado</option><option value="CLOSED">Cerrado</option></select></td></tr>)}</tbody>
+          </table>
+          {financingRequests.length === 0 ? <p className="rounded-md bg-[#F4EFE7] p-4 text-sm text-[#475467]">Todavía no hay solicitudes para {countryConfig[country].label}.</p> : null}
+        </CardContent>
+      </Card>
       <div className="grid gap-5 lg:grid-cols-2">
         <InfoList title="Módulos" items={modules} icon={ShieldCheck} />
         <InfoList title="Acciones" items={["Aprobar/rechazar KYC", "Solicitar documentos", "Crear oportunidad", "Editar oportunidad", "Activar/desactivar deal", "Subir documentos", "Asignar asesor", "Derivar a aliado", "Cambiar estado pipeline", "Configurar contenido por país"]} icon={FileCheck2} />

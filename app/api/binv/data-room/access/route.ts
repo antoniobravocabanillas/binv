@@ -1,11 +1,14 @@
-import { binvOpportunities, canAccessDataRoom } from "@/lib/binv/domain";
+import { canAccessDataRoom } from "@/lib/binv/domain";
+import { fallbackOpportunities, findOpportunities } from "@/lib/binv/repository";
 import { fail, handleApiError, ok, parseJson } from "@/lib/server/api";
 import { dataRoomAccessSchema } from "@/lib/validations/binv";
 
 export async function POST(request: Request) {
   try {
     const payload = await parseJson(request, dataRoomAccessSchema);
-    const opportunity = binvOpportunities.find((item) => item.id === payload.opportunityId);
+    const opportunities = await findOpportunities(payload.user.country).catch(() => fallbackOpportunities(payload.user.country));
+    const opportunity = opportunities.find((item) => item.id === payload.opportunityId)
+      ?? fallbackOpportunities(payload.user.country).find((item) => item.id === payload.opportunityId);
 
     if (!opportunity) return fail("Oportunidad no encontrada", 404);
 
@@ -24,4 +27,3 @@ export async function POST(request: Request) {
     return handleApiError(error);
   }
 }
-
