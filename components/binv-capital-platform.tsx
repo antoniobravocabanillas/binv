@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -94,6 +94,23 @@ type Opportunity = {
   legal: string;
 };
 
+type ApiOpportunity = {
+  id: string;
+  name: string;
+  country: MarketCountry;
+  assetType: string;
+  operatingPartner: string;
+  ticket: number;
+  currency: "USD" | "PEN" | "ARS";
+  targetReturn: string;
+  term: string;
+  risk: RiskLevel;
+  status: string;
+  summary: string;
+  requiresKyc: boolean;
+  requiresQualifiedProfile: boolean;
+};
+
 type PortfolioPosition = {
   name: string;
   country: MarketCountry;
@@ -108,6 +125,48 @@ type PortfolioPosition = {
   dataSource: string;
   updatedAt: string;
   documents: string;
+};
+
+type MarketValuationPosition = {
+  symbol: string;
+  market: string;
+  name: string;
+  currency: "USD" | "PEN" | "ARS";
+  quantity: number;
+  averageCost: number;
+  currentPrice: number;
+  marketValue: number;
+  costBasis: number;
+  unrealizedPnl: number;
+  unrealizedPnlPercent: number;
+  quoteProvider: string;
+  quoteAsOf: string;
+};
+
+type PortfolioValuation = {
+  baseCurrency: "USD" | "PEN" | "ARS";
+  positions: MarketValuationPosition[];
+  totals: {
+    marketValue: number;
+    costBasis: number;
+    unrealizedPnl: number;
+    unrealizedPnlPercent: number;
+  };
+  notes: string[];
+};
+
+type DataRoomAccessResult = {
+  allowed: boolean;
+  reason: string;
+};
+
+type FinancingResponse = {
+  id: string;
+  status: string;
+  pipeline: string[];
+  recommendedInstrument: string;
+  possibleInstruments: string[];
+  nextAction: string;
 };
 
 const countryConfig: Record<CountryCode, {
@@ -513,6 +572,18 @@ function canAccessDataRoom(user: DemoUser, deal: Opportunity) {
   return user.kyc === "Aprobado";
 }
 
+function toApiUser(user: DemoUser, country: CountryCode) {
+  return {
+    id: user.role.toLowerCase().replaceAll(" ", "-"),
+    name: user.name,
+    role: user.role,
+    kycStatus: user.kyc === "En revisión" ? "En revision" : user.kyc,
+    kybStatus: user.kyb === "En revisión" ? "En revision" : user.kyb,
+    profile: user.profile === "Público" ? "Publico" : user.profile,
+    country
+  };
+}
+
 function roleHomeView(role: UserRole): View {
   if (role === "Empresa solicitante") return "financing";
   if (role === "Admin BINV") return "admin";
@@ -540,6 +611,53 @@ function getVisibleOpportunities(country: CountryCode) {
   const own = opportunitiesByCountry[country];
   const merged = country === "AR" ? [...own, ...urbania, ...globalOpportunities] : [...own, ...globalOpportunities];
   return Array.from(new Map(merged.map((deal) => [deal.id, deal])).values());
+}
+
+function mergeApiOpportunities(country: CountryCode, apiItems: ApiOpportunity[]) {
+  const local = getVisibleOpportunities(country);
+  const merged = new Map(local.map((deal) => [deal.id, deal]));
+
+  apiItems.forEach((item) => {
+    const existing = merged.get(item.id);
+    merged.set(item.id, {
+      ...(existing ?? {
+        partnerRole: "Aliado operativo / fuente backend.",
+        referralStatus: item.requiresKyc ? "Acceso sujeto a KYC/KYB" : "Vista pública",
+        marketReference: item.country === "AR" ? "Mercado argentino" : item.country === "PE" ? "Mercado peruano / regional" : "Mercados globales",
+        binvRole: "Originador, asesor, estructurador y conector",
+        thesis: item.summary,
+        structure: "Estructura sujeta a documentación final.",
+        legal: "Disponibilidad sujeta a perfil, país y aliado operativo."
+      }),
+      id: item.id,
+      name: item.name,
+      country: item.country,
+      assetType: item.assetType,
+      operatingPartner: item.operatingPartner,
+      ticket: item.ticket,
+      currency: item.currency,
+      targetReturn: item.targetReturn,
+      term: item.term,
+      risk: item.risk,
+      status: normalizeDealStatus(item.status),
+      summary: item.summary
+    });
+  });
+
+  return Array.from(merged.values());
+}
+
+function normalizeDealStatus(status: string): DealStatus {
+  const map: Record<string, DealStatus> = {
+    "En analisis": "En análisis",
+    "Proximamente": "Próximamente",
+    "Solo clientes calificados": "Solo clientes calificados",
+    "En estructuracion": "En estructuración",
+    "Derivada a aliado": "Derivada a aliado",
+    "Abierta": "Abierta",
+    "Cerrada": "Cerrada"
+  };
+  return map[status] ?? "En análisis";
 }
 
 function SectionTitle({ eyebrow, title, text, tone = "light" }: { eyebrow?: string; title: string; text?: string; tone?: "light" | "dark" }) {
@@ -1191,6 +1309,8 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
   const [country, setCountry] = useState<CountryCode>("PE");
   const [view, setView] = useState<View>(roleHomeView(user.role));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [apiOpportunities, setApiOpportunities] = useState<Opportunity[] | null>(null);
+  const [opportunitiesApiStatus, setOpportunitiesApiStatus] = useState<"loading" | "connected" | "fallback">("loading");
   const [selectedDeal, setSelectedDeal] = useState<Opportunity>(getVisibleOpportunities("PE")[0]);
   const [asset, setAsset] = useState("Todos");
   const [partner, setPartner] = useState("Todos");
@@ -1213,11 +1333,35 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
   function changeCountry(next: CountryCode) {
     setCountry(next);
     setSelectedDeal(getVisibleOpportunities(next)[0]);
+    setOpportunitiesApiStatus("loading");
     window.localStorage.setItem("binv-country", next);
   }
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setOpportunitiesApiStatus("loading");
+
+    fetch(`/api/binv/opportunities?country=${country}`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("No se pudo cargar oportunidades")))
+      .then((payload: { data: ApiOpportunity[] }) => {
+        const next = mergeApiOpportunities(country, payload.data);
+        setApiOpportunities(next);
+        setOpportunitiesApiStatus("connected");
+        setSelectedDeal((current) => next.find((deal) => deal.id === current.id) ?? next[0]);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setApiOpportunities(null);
+        setOpportunitiesApiStatus("fallback");
+      });
+
+    return () => controller.abort();
+  }, [country]);
+
+  const opportunitySource = apiOpportunities ?? getVisibleOpportunities(country);
+
   const visibleOpportunities = useMemo(() => {
-    return getVisibleOpportunities(country).filter((deal) => {
+    return opportunitySource.filter((deal) => {
       const countryMatch = countryFilter === "Activo" ? true : countryFilter === "Todos" ? true : deal.country === countryFilter;
       const assetMatch = asset === "Todos" || deal.assetType === asset;
       const partnerMatch = partner === "Todos" || deal.operatingPartner === partner;
@@ -1229,9 +1373,9 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
       const queryMatch = `${deal.name} ${deal.operatingPartner} ${deal.assetType} ${deal.marketReference}`.toLowerCase().includes(query.toLowerCase());
       return countryMatch && assetMatch && partnerMatch && riskMatch && statusMatch && currencyMatch && ticketMatch && termMatch && queryMatch;
     });
-  }, [asset, country, countryFilter, currency, partner, query, risk, status, term, ticket]);
+  }, [asset, countryFilter, currency, opportunitySource, partner, query, risk, status, term, ticket]);
 
-  const partnerOptions = Array.from(new Set(getVisibleOpportunities(country).map((deal) => deal.operatingPartner)));
+  const partnerOptions = Array.from(new Set(opportunitySource.map((deal) => deal.operatingPartner)));
   const navGroups: { label: string; items: { id: View; label: string; icon: typeof BarChart3 }[] }[] = [
     { label: "Principal", items: [{ id: "home", label: "Inicio institucional", icon: Landmark }, { id: "dashboard", label: "Dashboard", icon: BarChart3 }] },
     { label: "Inversiones", items: [{ id: "investments", label: "Investment Hub", icon: Landmark }, { id: "deal", label: "Deal Room", icon: FileText }, { id: "portfolio", label: "Portfolio", icon: PieChart }] },
@@ -1352,6 +1496,7 @@ function PrivatePlatform({ user, onLogout }: { user: DemoUser; onLogout: () => v
               opportunities={visibleOpportunities}
               filters={{ asset, partner, risk, status, currency, ticket, term, countryFilter, query }}
               options={{ partnerOptions }}
+              apiStatus={opportunitiesApiStatus}
               setters={{ setAsset, setPartner, setRisk, setStatus, setCurrency, setTicket, setTerm, setCountryFilter, setQuery }}
               onDeal={(deal) => {
                 setSelectedDeal(deal);
@@ -1465,12 +1610,14 @@ function InvestmentHub({
   opportunities,
   filters,
   options,
+  apiStatus,
   setters,
   onDeal
 }: {
   opportunities: Opportunity[];
   filters: Record<string, string>;
   options: { partnerOptions: string[] };
+  apiStatus: "loading" | "connected" | "fallback";
   setters: Record<string, (value: string) => void>;
   onDeal: (deal: Opportunity) => void;
 }) {
@@ -1490,7 +1637,10 @@ function InvestmentHub({
     <section className="space-y-5">
       <SectionTitle eyebrow="Investment Hub" title="Oportunidades seleccionadas" text="Todas las oportunidades muestran aliado operativo, rol del aliado, estado de derivación y rol de BINV." />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#DED6C7] bg-[#FCFAF7] p-4">
-        <p className="text-sm font-semibold text-[#07111F]">{opportunities.length} oportunidades visibles · {activeFilterCount} filtros activos</p>
+        <div>
+          <p className="text-sm font-semibold text-[#07111F]">{opportunities.length} oportunidades visibles · {activeFilterCount} filtros activos</p>
+          <p className="mt-1 text-xs text-[#667085]">{apiStatus === "connected" ? "API BINV conectada" : apiStatus === "loading" ? "Sincronizando oportunidades..." : "Fallback local activo"}</p>
+        </div>
         <Button variant="outline" size="sm" onClick={clearFilters}>Limpiar filtros</Button>
       </div>
       <Card className="rounded-md border-[#DED6C7]"><CardContent className="grid gap-3 p-4 lg:grid-cols-4">
@@ -1523,7 +1673,35 @@ function FilterSelect({ label, value, onChange, items }: { label?: string; value
 }
 
 function DealRoom({ country, deal, user }: { country: CountryCode; deal: Opportunity; user: DemoUser }) {
-  const hasDataRoomAccess = canAccessDataRoom(user, deal);
+  const fallbackAccess = canAccessDataRoom(user, deal);
+  const [accessResult, setAccessResult] = useState<DataRoomAccessResult | null>(null);
+  const [accessStatus, setAccessStatus] = useState<"checking" | "connected" | "fallback">("checking");
+  const hasDataRoomAccess = accessResult?.allowed ?? fallbackAccess;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setAccessStatus("checking");
+
+    fetch("/api/binv/data-room/access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: toApiUser(user, country), opportunityId: deal.id }),
+      signal: controller.signal
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("No se pudo validar acceso")))
+      .then((payload: { data: DataRoomAccessResult }) => {
+        setAccessResult(payload.data);
+        setAccessStatus("connected");
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setAccessResult(null);
+        setAccessStatus("fallback");
+      });
+
+    return () => controller.abort();
+  }, [country, deal.id, user]);
+
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Deal Room" title={deal.name} text={deal.summary} />
@@ -1533,7 +1711,7 @@ function DealRoom({ country, deal, user }: { country: CountryCode; deal: Opportu
           <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Tesis de inversión</CardTitle><CardDescription>{deal.thesis}</CardDescription></CardHeader></Card>
           <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Estructura del deal</CardTitle><CardDescription>{deal.structure}</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-3"><InfoPill label="Aliado operativo" value={deal.operatingPartner} /><InfoPill label="Rol del aliado" value={deal.partnerRole} /><InfoPill label="Mercado / infraestructura" value={deal.marketReference} /></CardContent></Card>
           <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Riesgos principales</CardTitle></CardHeader><CardContent className="grid gap-3 text-sm text-[#475467] md:grid-cols-3">{["Riesgo de mercado, tasa y liquidez.", "Riesgo de contraparte, documentación y ejecución.", "Disponibilidad sujeta a perfil, país y aprobación del aliado."].map((item) => <p key={item} className="rounded-md border border-[#DED6C7] bg-[#F4EFE7] p-3">{item}</p>)}</CardContent></Card>
-          <DataRoomSection user={user} deal={deal} hasAccess={hasDataRoomAccess} />
+          <DataRoomSection user={user} deal={deal} hasAccess={hasDataRoomAccess} accessStatus={accessStatus} accessReason={accessResult?.reason} />
           <FinancingPipeline title="Flujo del deal" items={["Solicitud de acceso", "Validación KYC/KYB", "Revisión BINV", "Derivación a aliado operativo", "Ejecución externa", "Seguimiento informativo"]} />
           <InfoList title="FAQ del deal" items={["El acceso depende de KYC/KYB y clasificación de cliente.", "La documentación final pertenece al aliado, custodio, mercado o vehículo.", "BINV no recibe órdenes ni ejecuta operaciones desde la plataforma."]} icon={FileText} />
         </div>
@@ -1547,7 +1725,7 @@ function DealRoom({ country, deal, user }: { country: CountryCode; deal: Opportu
   );
 }
 
-function DataRoomSection({ user, deal, hasAccess }: { user: DemoUser; deal: Opportunity; hasAccess: boolean }) {
+function DataRoomSection({ user, deal, hasAccess, accessStatus, accessReason }: { user: DemoUser; deal: Opportunity; hasAccess: boolean; accessStatus: "checking" | "connected" | "fallback"; accessReason?: string }) {
   const docs = ["Memo ejecutivo.pdf", "Modelo financiero.xlsx", "Term sheet preliminar.pdf"];
   return (
     <Card className={cn("rounded-md border-[#DED6C7]", !hasAccess && "border-[#BFA46A]/60 bg-[#FFF8E8]")}>
@@ -1555,9 +1733,12 @@ function DataRoomSection({ user, deal, hasAccess }: { user: DemoUser; deal: Oppo
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle>Documentos del data room</CardTitle>
-            <CardDescription>{hasAccess ? "Acceso habilitado para revisión documental." : `Acceso restringido. ${user.role} · KYC ${user.kyc} · ${deal.status}.`}</CardDescription>
+            <CardDescription>{hasAccess ? "Acceso habilitado para revisión documental." : `${accessReason ?? "Acceso restringido"}. ${user.role} · KYC ${user.kyc} · ${deal.status}.`}</CardDescription>
           </div>
-          <Badge variant="outline" className={hasAccess ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#BFA46A]/45 bg-[#BFA46A]/10 text-[#7A6032]"}>{hasAccess ? "Habilitado" : "Requiere aprobación"}</Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className={accessStatus === "connected" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#BFA46A]/45 bg-[#BFA46A]/10 text-[#7A6032]"}>{accessStatus === "connected" ? "API validada" : accessStatus === "checking" ? "Validando..." : "Fallback local"}</Badge>
+            <Badge variant="outline" className={hasAccess ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#BFA46A]/45 bg-[#BFA46A]/10 text-[#7A6032]"}>{hasAccess ? "Habilitado" : "Requiere aprobación"}</Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">{docs.map((doc) => <div key={doc} className="flex items-center gap-2 rounded-md border border-[#DED6C7] bg-[#FCFAF7] p-3 text-sm"><LockKeyhole className="h-4 w-4 text-[#9C7A3E]" />{hasAccess ? doc : `${doc} · bloqueado`}</div>)}</CardContent>
@@ -1569,10 +1750,102 @@ function Portfolio({ country }: { country: CountryCode }) {
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Portfolio" title="Posiciones y cashflow proyectado" text="Portfolio informativo. No sustituye extractos oficiales del custodio, broker, ALyC, sociedad administradora, fiduciario o aliado correspondiente." />
+      <MarketPortfolioValuation country={country} />
       <div className="grid gap-4">{portfolioByCountry[country].map((item) => <PortfolioPositionCard key={item.name} item={item} />)}</div>
       <Card className="rounded-md border-[#DED6C7]"><CardHeader><CardTitle>Cashflow proyectado</CardTitle></CardHeader><CardContent><MiniBarChart data={[{ label: "Jun", value: 14 }, { label: "Jul", value: 28 }, { label: "Ago", value: 22 }, { label: "Sep", value: 36 }]} /></CardContent></Card>
     </section>
   );
+}
+
+function MarketPortfolioValuation({ country }: { country: CountryCode }) {
+  const positions = useMemo(() => getMarketPortfolioPositions(country), [country]);
+  const [valuation, setValuation] = useState<PortfolioValuation | null>(null);
+  const [status, setStatus] = useState<"loading" | "connected" | "error">("loading");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setStatus("loading");
+
+    fetch("/api/binv/portfolio/valuation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseCurrency: "USD", positions }),
+      signal: controller.signal
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("No se pudo valorizar portfolio")))
+      .then((payload: { data: PortfolioValuation }) => {
+        setValuation(payload.data);
+        setStatus("connected");
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setValuation(null);
+        setStatus("error");
+      });
+
+    return () => controller.abort();
+  }, [positions]);
+
+  return (
+    <Card className="rounded-md border-[#DED6C7] bg-[#FCFAF7] shadow-[0_18px_50px_-38px_rgba(11,16,32,0.45)]">
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Portfolio mercado de valores</CardTitle>
+            <CardDescription>Tenencias cargadas manualmente y seguimiento por market data backend.</CardDescription>
+          </div>
+          <Badge variant="outline" className={status === "connected" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-[#BFA46A]/45 bg-[#BFA46A]/10 text-[#7A6032]"}>
+            {status === "connected" ? "API valorización conectada" : status === "loading" ? "Valorizando..." : "Sin conexión API"}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {valuation ? (
+          <>
+            <div className="grid gap-3 md:grid-cols-4">
+              <InfoPill label="Valor mercado" value={money(valuation.totals.marketValue, valuation.baseCurrency)} />
+              <InfoPill label="Costo" value={money(valuation.totals.costBasis, valuation.baseCurrency)} />
+              <InfoPill label="PnL no realizado" value={money(valuation.totals.unrealizedPnl, valuation.baseCurrency)} />
+              <InfoPill label="Rendimiento" value={`${valuation.totals.unrealizedPnlPercent}%`} />
+            </div>
+            <div className="overflow-hidden rounded-md border border-[#DED6C7]">
+              {valuation.positions.map((position) => (
+                <div key={`${position.symbol}-${position.market}`} className="grid gap-2 border-b border-[#DED6C7] p-3 text-sm last:border-b-0 lg:grid-cols-[0.8fr_1fr_0.5fr_0.6fr_0.7fr_0.7fr_0.6fr] lg:items-center">
+                  <strong>{position.symbol}</strong>
+                  <span>{position.name}</span>
+                  <span>{position.quantity}</span>
+                  <span>{money(position.currentPrice, position.currency)}</span>
+                  <span>{money(position.marketValue, position.currency)}</span>
+                  <span className={position.unrealizedPnl >= 0 ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>{money(position.unrealizedPnl, position.currency)}</span>
+                  <span>{position.unrealizedPnlPercent}%</span>
+                  <p className="text-xs text-[#667085] lg:col-span-7">Fuente: {position.quoteProvider}. Actualizado: {new Date(position.quoteAsOf).toLocaleString("es-PE")}.</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs leading-5 text-[#667085]">{valuation.notes.join(" ")}</p>
+          </>
+        ) : (
+          <div className="rounded-md border border-[#DED6C7] bg-[#F4EFE7] p-4 text-sm text-[#475467]">No se pudo valorizar con la API. Las posiciones manuales siguen disponibles para seguimiento operativo.</div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function getMarketPortfolioPositions(country: CountryCode) {
+  if (country === "AR") {
+    return [
+      { symbol: "AL30.BA", market: "BYMA", name: "Bono AL30", currency: "USD", quantity: 100, averageCost: 58, source: "market-data" },
+      { symbol: "GD30.BA", market: "BYMA", name: "Bono GD30", currency: "USD", quantity: 80, averageCost: 60.5, source: "market-data" },
+      { symbol: "SPY", market: "NYSE Arca", name: "SPDR S&P 500 ETF", currency: "USD", quantity: 12, averageCost: 590, source: "market-data" }
+    ];
+  }
+
+  return [
+    { symbol: "BAP.LM", market: "Bolsa de Lima", name: "Credicorp Ltd.", currency: "USD", quantity: 20, averageCost: 148, source: "market-data" },
+    { symbol: "BIL", market: "NYSE Arca", name: "SPDR Bloomberg 1-3M T-Bill", currency: "USD", quantity: 75, averageCost: 91.1, source: "market-data" },
+    { symbol: "SPY", market: "NYSE Arca", name: "SPDR S&P 500 ETF", currency: "USD", quantity: 8, averageCost: 590, source: "market-data" }
+  ];
 }
 
 function PortfolioPositionCard({ item }: { item: PortfolioPosition }) {
@@ -1598,7 +1871,46 @@ function Urbania({ country }: { country: CountryCode }) {
 function FinancingHub({ country, user }: { country: CountryCode; user: DemoUser }) {
   const config = countryConfig[country];
   const partners = partnersByCountry[country].filter((item) => item.category === "Aliado operativo" || item.category === "Infraestructura de mercado" || item.category === "Vertical BINV");
-  const formFields = ["Razón social", country === "AR" ? "CUIT" : "RUC", "Sector", "Facturación mensual/anual", "Monto requerido", "Destino de fondos", "Plazo buscado", "Garantías disponibles", "Contacto"];
+  const [response, setResponse] = useState<FinancingResponse | null>(null);
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+
+  async function submitFinancingRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setSubmitStatus("submitting");
+
+    const payload = {
+      country,
+      legalName: String(formData.get("legalName") || ""),
+      taxId: String(formData.get("taxId") || ""),
+      sector: String(formData.get("sector") || ""),
+      revenue: String(formData.get("revenue") || ""),
+      amountRequested: Number(formData.get("amountRequested") || 0),
+      currency: String(formData.get("currency") || config.baseCurrency),
+      useOfFunds: String(formData.get("useOfFunds") || ""),
+      desiredTerm: String(formData.get("desiredTerm") || ""),
+      guarantees: String(formData.get("guarantees") || ""),
+      instrument: String(formData.get("instrument") || ""),
+      contactName: String(formData.get("contactName") || ""),
+      contactEmail: String(formData.get("contactEmail") || ""),
+      notes: String(formData.get("notes") || "")
+    };
+
+    try {
+      const result = await fetch("/api/binv/financing-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!result.ok) throw new Error("No se pudo enviar la solicitud");
+      const json = await result.json() as { data: FinancingResponse };
+      setResponse(json.data);
+      setSubmitStatus("success");
+    } catch {
+      setSubmitStatus("error");
+    }
+  }
+
   return (
     <section className="space-y-5">
       <SectionTitle eyebrow="Financing Hub" title="Solicitud de financiamiento empresarial" text={config.financingIntro} />
@@ -1608,17 +1920,32 @@ function FinancingHub({ country, user }: { country: CountryCode; user: DemoUser 
         <InfoPill label="Mercado" value={`${config.label} · ${config.baseCurrency}/${config.secondaryCurrency}`} />
       </div>
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
-        <Card className="rounded-md border-[#DED6C7]"><CardContent className="grid gap-3 p-5 md:grid-cols-2">
-          <FormField label="País"><Input defaultValue={config.label} /></FormField>
-          {formFields.map((field) => <FormField key={field} label={field}><Input placeholder={`Completar ${field.toLowerCase()}`} /></FormField>)}
-          <FormField label="Moneda sugerida"><select className="h-11 w-full rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>{config.baseCurrency} / {config.secondaryCurrency}</option></select></FormField>
-          <FormField label="Instrumento posible"><select className="h-11 w-full rounded-md border bg-[#FCFAF7] px-3 text-sm"><option>Seleccionar instrumento</option>{financingInstrumentsByCountry[country].map((item) => <option key={item}>{item}</option>)}</select></FormField>
-          <Button variant="outline"><Upload className="h-4 w-4" />Documentos adjuntos</Button>
-          <FormField label="Comentarios para análisis BINV" className="md:col-span-2"><Textarea placeholder="Describe necesidad, urgencia, flujo de fondos y documentación disponible." /></FormField>
-          <Button className="md:col-span-2">Enviar solicitud de evaluación</Button>
+        <Card className="rounded-md border-[#DED6C7]"><CardContent className="p-5">
+          <form onSubmit={submitFinancingRequest} className="grid gap-3 md:grid-cols-2">
+            <FormField label="País"><Input value={config.label} readOnly /></FormField>
+            <FormField label="Razón social"><Input name="legalName" required placeholder="Empresa Demo SAC" defaultValue={country === "PE" ? "Inmobiliaria Andina SAC" : "Empresa Demo SA"} /></FormField>
+            <FormField label={country === "AR" ? "CUIT" : "RUC"}><Input name="taxId" required placeholder={country === "AR" ? "30-12345678-9" : "20601234567"} defaultValue={country === "AR" ? "30-12345678-9" : "20601234567"} /></FormField>
+            <FormField label="Sector"><Input name="sector" required placeholder="Real estate, agro, industria..." defaultValue={country === "PE" ? "Real estate" : "Agroindustria"} /></FormField>
+            <FormField label="Facturación mensual/anual"><Input name="revenue" required placeholder="USD 2M anual" defaultValue={country === "PE" ? "USD 2.4M anual" : "ARS 250M anual"} /></FormField>
+            <FormField label="Monto requerido"><Input name="amountRequested" required type="number" min="1" placeholder="150000" defaultValue={country === "PE" ? 250000 : 150000} /></FormField>
+            <FormField label="Moneda"><select name="currency" className="h-11 w-full rounded-md border bg-[#FCFAF7] px-3 text-sm" defaultValue={config.baseCurrency}><option>USD</option><option>PEN</option><option>ARS</option></select></FormField>
+            <FormField label="Destino de fondos"><Input name="useOfFunds" required placeholder="Capital de trabajo, obra, expansión..." defaultValue="Capital de trabajo y estructura de crecimiento" /></FormField>
+            <FormField label="Plazo buscado"><Input name="desiredTerm" required placeholder="180 días / 24 meses" defaultValue={country === "PE" ? "24 meses" : "180 días"} /></FormField>
+            <FormField label="Garantías disponibles"><Input name="guarantees" placeholder="Cheques, facturas, inmueble, contratos..." defaultValue={country === "PE" ? "Contrato de preventa y flujo de proyecto" : "Cheques y facturas"} /></FormField>
+            <FormField label="Contacto"><Input name="contactName" required placeholder="Nombre y apellido" defaultValue="Ana Demo" /></FormField>
+            <FormField label="Email"><Input name="contactEmail" required type="email" placeholder="ana@empresa.com" defaultValue="ana@example.com" /></FormField>
+            <FormField label="Instrumento posible"><select name="instrument" className="h-11 w-full rounded-md border bg-[#FCFAF7] px-3 text-sm"><option value="">Recomendar automáticamente</option>{financingInstrumentsByCountry[country].map((item) => <option key={item}>{item}</option>)}</select></FormField>
+            <Button type="button" variant="outline"><Upload className="h-4 w-4" />Documentos adjuntos</Button>
+            <FormField label="Comentarios para análisis BINV" className="md:col-span-2"><Textarea name="notes" placeholder="Describe necesidad, urgencia, flujo de fondos y documentación disponible." /></FormField>
+            <Button className="md:col-span-2" disabled={submitStatus === "submitting"}>{submitStatus === "submitting" ? "Enviando..." : "Enviar solicitud de evaluación"}</Button>
+            {submitStatus === "error" ? <p className="md:col-span-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">No se pudo enviar la solicitud. Revisa campos requeridos o intenta nuevamente.</p> : null}
+          </form>
         </CardContent></Card>
         <div className="space-y-5">
-          <FinancingPipeline title="Pipeline de solicitud" items={["Recibido", "En análisis BINV", "Documentación requerida", "Perfilamiento de instrumento", "Enviado a aliado", "En evaluación por aliado", "Aprobado", "Rechazado", "Cerrado"]} />
+          {response ? (
+            <InfoList title={`Solicitud ${response.id}`} items={[`Estado: ${response.status}`, `Instrumento recomendado: ${response.recommendedInstrument}`, response.nextAction]} icon={CheckCircle2} />
+          ) : null}
+          <FinancingPipeline title="Pipeline de solicitud" items={response?.pipeline ?? ["Recibido", "En análisis BINV", "Documentación requerida", "Perfilamiento de instrumento", "Enviado a aliado", "En evaluación por aliado", "Aprobado", "Rechazado", "Cerrado"]} />
           <InfoList title="Aliados e infraestructura" items={partners.map((item) => `${item.name}: ${item.role}`)} icon={Handshake} />
         </div>
       </div>
